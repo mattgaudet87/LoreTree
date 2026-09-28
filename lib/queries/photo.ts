@@ -156,6 +156,94 @@ export function maybeRenameAutoEvent(photoId: string, newName: string, userId = 
   }
 }
 
+export interface ContextNoteInput {
+  text: string;
+  inputMethod: string;
+  newDescription: string;
+  newTags: { name: string; type: TagType }[];
+}
+
+/**
+ * Saves a context note: records the prior description for Undo, applies the
+ * AI-merged description, and adds the new tags with source "user" (the facts
+ * came from Matt, even though Claude phrased the tags).
+ */
+export function addContextNote(
+  photoId: string,
+  input: ContextNoteInput,
+  userId = DEFAULT_USER_ID
+): PhotoWithTags | null {
+  const photo = getPhotoById(photoId, userId);
+  if (!photo) return null;
+
+  const noteId = Number(
+    db
+      .prepare(
+        `INSERT INTO context_notes (user_id, photo_id, text, input_method, prev_description)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .run(userId, photoId, input.text, input.inputMethod, photo.description).lastInsertRowid
+  );
+
+  const addedTagIds: number[] = [];
+  for (const tag of input.newTags) {
+    const trimmed = tag.name.trim();
+    if (!trimmed) continue;
+    const tagId = getOrCreateTag(trimmed, tag.type, userId);
+    const result = db
+      .prepare(`INSERT OR IGNORE INTO photo_tags (photo_id, tag_id, user_id, source) VALUES (?, ?, ?, 'user')`)
+      .run(photoId, tagId, userId);
+    if (result.changes > 0) addedTagIds.push(tagId);
+  }
+
+  db.prepare(`UPDATE context_notes SET added_tag_ids = ? WHERE id = ? AND user_id = ?`).run(
+    JSON.stringify(addedTagIds),
+    noteId,
+    userId
+  );
+  db.prepare(`UPDATE photos SET description = ? WHERE id = ? AND user_id = ?`).run(
+    input.newDescription,
+    photoId,
+    userId
+  );
+
+  return getPhotoById(photoId, userId);
+}
+
+/**
+ * Undoes the most recent context note for a photo: restores the description
+ * it overwrote and removes the tags it added, then deletes the note so it
+ * can't be undone twice.
+ */
+export function undoLastContextNote(photoId: string, userId = DEFAULT_USER_ID): PhotoWithTags | null {
+  const note = db
+    .prepare(
+      `SELECT id, prev_description, added_tag_ids FROM context_notes
+       WHERE photo_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1`
+    )
+    .get(photoId, userId) as { id: number; prev_description: string | null; added_tag_ids: string | null } | undefined;
+
+  if (!note) return getPhotoById(photoId, userId);
+
+  const addedTagIds: number[] = note.added_tag_ids ? JSON.parse(note.added_tag_ids) : [];
+  for (const tagId of addedTagIds) {
+    db.prepare(`DELETE FROM photo_tags WHERE photo_id = ? AND tag_id = ? AND user_id = ?`).run(
+      photoId,
+      tagId,
+      userId
+    );
+  }
+
+  db.prepare(`UPDATE photos SET description = ? WHERE id = ? AND user_id = ?`).run(
+    note.prev_description,
+    photoId,
+    userId
+  );
+  db.prepare(`DELETE FROM context_notes WHERE id = ? AND user_id = ?`).run(note.id, userId);
+
+  return getPhotoById(photoId, userId);
+}
+
 /** favorite x3 + apple_score + people count x0.5 + (has context note) x2 */
 export function highlightScore(photoId: string, userId = DEFAULT_USER_ID): number {
   const row = db

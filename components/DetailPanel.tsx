@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PhotoWithTags, Tag, TagType } from "@/lib/types";
 import { photoImageUrl } from "@/lib/image-url";
+import MicButton from "@/components/MicButton";
 
 interface DetailPanelProps {
   photo: PhotoWithTags;
@@ -29,6 +30,20 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shareState, setShareState] = useState<"idle" | "sharing" | "downloaded">("idle");
+
+  const [contextOpen, setContextOpen] = useState(false);
+  const [contextText, setContextText] = useState("");
+  const [contextBusy, setContextBusy] = useState(false);
+  const [contextError, setContextError] = useState<string | null>(null);
+  const [newTagKeys, setNewTagKeys] = useState<Set<string>>(new Set());
+  const [showUndo, setShowUndo] = useState(false);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -121,6 +136,53 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
     }
   }
 
+  async function saveContext() {
+    const text = contextText.trim();
+    if (!text) {
+      setContextError("Add some context first");
+      return;
+    }
+    setContextBusy(true);
+    setContextError(null);
+    try {
+      const res = await fetch(`/api/photos/${photo.id}/context`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, input_method: "text" }),
+      });
+      if (!res.ok) throw new Error("Could not add context");
+      const { photo: updated, new_tags: newTags } = await res.json();
+      onPhotoChange(updated);
+      setNewTagKeys(new Set((newTags as { name: string; type: string }[]).map((t) => `${t.type}:${t.name}`)));
+      setContextText("");
+      setContextOpen(false);
+      setShowUndo(true);
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = setTimeout(() => {
+        setShowUndo(false);
+        setNewTagKeys(new Set());
+      }, 10_000);
+    } catch (err) {
+      setContextError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setContextBusy(false);
+    }
+  }
+
+  async function undoContext() {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setShowUndo(false);
+    setNewTagKeys(new Set());
+    try {
+      const res = await fetch(`/api/photos/${photo.id}/context/undo`, { method: "POST" });
+      if (!res.ok) throw new Error("Could not undo");
+      const { photo: updated } = await res.json();
+      onPhotoChange(updated);
+    } catch (err) {
+      setContextError(err instanceof Error ? err.message : "Something went wrong");
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-30 bg-black" onClick={onClose}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -164,7 +226,13 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
         </div>
 
           {photo.ai_status === "done" && photo.description ? (
-            <p className="font-serif text-base leading-relaxed text-text">{photo.description}</p>
+            <p
+              className={`font-serif text-base leading-relaxed text-text transition-colors duration-1000 ${
+                showUndo ? "rounded-lg bg-accent/15 px-2 py-1 -mx-2" : ""
+              }`}
+            >
+              {photo.description}
+            </p>
           ) : (
             <p className="text-sm text-text-muted">
               No description yet —{" "}
@@ -178,9 +246,16 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
             {photo.tags.map((tag) => (
               <span
                 key={tag.id}
-                className="flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-text"
+                className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs text-text ${
+                  newTagKeys.has(`${tag.type}:${tag.name}`)
+                    ? "border-accent bg-accent/15"
+                    : "border-border bg-surface-2"
+                }`}
               >
                 {tag.name}
+                {newTagKeys.has(`${tag.type}:${tag.name}`) && (
+                  <span className="text-[10px] uppercase text-accent">new</span>
+                )}
                 <button
                   onClick={() => removeTag(tag)}
                   disabled={busy}
@@ -223,6 +298,50 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
 
           {error && <p className="text-xs text-node-events">{error}</p>}
 
+          {contextOpen && (
+            <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3">
+              <div className="flex gap-2">
+                <textarea
+                  value={contextText}
+                  onChange={(e) => setContextText(e.target.value)}
+                  placeholder="What does this photo mean to you?"
+                  rows={3}
+                  className="flex-1 resize-none rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-text-muted"
+                />
+                <MicButton onResult={(text) => setContextText((prev) => (prev ? `${prev} ${text}` : text))} />
+              </div>
+              {contextError && <p className="text-xs text-node-events">{contextError}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setContextOpen(false);
+                    setContextText("");
+                    setContextError(null);
+                  }}
+                  className="flex-1 rounded-lg border border-border px-3 py-2 text-sm text-text-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveContext}
+                  disabled={contextBusy || !contextText.trim()}
+                  className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-bg disabled:opacity-40"
+                >
+                  {contextBusy ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {showUndo && (
+            <div className="flex items-center justify-between rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 text-sm text-text">
+              <span>Context added</span>
+              <button onClick={undoContext} className="font-medium text-accent underline">
+                Undo
+              </button>
+            </div>
+          )}
+
           <div className="mt-auto flex gap-2 pt-2">
             <button
               onClick={share}
@@ -238,9 +357,8 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
               {photo.is_profile ? "★ In profile" : "☆ Add to profile"}
             </button>
             <button
-              disabled
-              className="flex-1 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-text-muted opacity-50"
-              title="Coming in Phase 6"
+              onClick={() => setContextOpen((open) => !open)}
+              className="flex-1 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-text"
             >
               Add context
             </button>

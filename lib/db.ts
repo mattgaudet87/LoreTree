@@ -120,4 +120,11 @@ if (!photoColumns.some((c) => c.name === "images_updated_at")) {
   db.exec(`ALTER TABLE photos ADD COLUMN images_updated_at TEXT`);
 }
 
+// Tracks which tags a context note added, as a JSON array of tag ids, so
+// Undo can remove exactly those tags without touching ones added elsewhere.
+const contextNoteColumns = db.prepare(`PRAGMA table_info(context_notes)`).all() as { name: string }[];
+if (!contextNoteColumns.some((c) => c.name === "added_tag_ids")) {
+  db.exec(`ALTER TABLE context_notes ADD COLUMN added_tag_ids TEXT`);
+}
+
 export const DEFAULT_USER_ID = "matt";

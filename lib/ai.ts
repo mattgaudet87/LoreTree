@@ -145,3 +145,52 @@ export async function analyzePhoto(photo: PhotoRow, context: PhotoContext): Prom
 export function estimateCost(usage: AnalysisUsage): number {
   return usage.inputTokens * HAIKU_PRICE_PER_TOKEN.input + usage.outputTokens * HAIKU_PRICE_PER_TOKEN.output;
 }
+
+const CONTEXT_TAG_TYPES = ["person", "place", "event", "keyword"] as const;
+export type ContextTagType = (typeof CONTEXT_TAG_TYPES)[number];
+
+const contextResultSchema = z.object({
+  description: z.string().min(1),
+  new_tags: z.array(
+    z.object({
+      name: z.string().min(1),
+      type: z.enum(CONTEXT_TAG_TYPES),
+    })
+  ),
+});
+
+export interface ContextResult {
+  description: string;
+  new_tags: { name: string; type: ContextTagType }[];
+}
+
+function buildContextPrompt(existingDescription: string, contextText: string): string {
+  return `You are updating a personal photo memory app's description of a photo, using context the photo's owner just added.
+
+Current description: "${existingDescription}"
+
+Context the owner added: "${contextText}"
+
+Reply with JSON only, no other text, matching this exact shape:
+{
+  "description": "The description rewritten to naturally weave in the new context. Keep every existing fact from the current description, never invent anything beyond what's given, 2 to 4 sentences.",
+  "new_tags": [{ "name": "short tag name", "type": "one of: person, place, event, keyword" }]
+}
+Only include tags for people, places, events, or keywords the context text actually names. If nothing new is worth tagging, use an empty array.`;
+}
+
+export async function mergeContext(existingDescription: string, contextText: string): Promise<ContextResult> {
+  const response = await client.messages.create({
+    model: MODELS.context,
+    max_tokens: 1024,
+    messages: [{ role: "user", content: buildContextPrompt(existingDescription, contextText) }],
+  });
+
+  const textBlock = response.content.find((block): block is Anthropic.TextBlock => block.type === "text");
+  if (!textBlock) {
+    throw new Error("Claude did not return a text response");
+  }
+
+  const parsed = JSON.parse(extractJsonObject(textBlock.text));
+  return contextResultSchema.parse(parsed);
+}
