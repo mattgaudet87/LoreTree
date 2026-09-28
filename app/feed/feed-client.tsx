@@ -8,8 +8,7 @@ import DetailPanel from "@/components/DetailPanel";
 import type { PhotoWithTags } from "@/lib/types";
 import { photoImageUrl } from "@/lib/image-url";
 import { formatWeekLabel } from "@/lib/queries/date-utils";
-
-const IMAGE_MODE_KEY = "loretree:feed-image-mode";
+import { loadImageMode, saveImageMode } from "@/lib/image-mode";
 
 function filterLabel(filter: string | null, year: string | null, week: string | null, ids: string | null): string | null {
   if (filter) {
@@ -45,21 +44,12 @@ export default function FeedClient() {
   const [imageMode, setImageMode] = useState<ImageFitMode>("fit");
 
   useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(IMAGE_MODE_KEY);
-      if (stored === "fit" || stored === "zoom") setImageMode(stored);
-    } catch {
-      // Private browsing or blocked storage: fall back to the default silently.
-    }
+    setImageMode(loadImageMode());
   }, []);
 
   function selectImageMode(mode: ImageFitMode) {
     setImageMode(mode);
-    try {
-      window.localStorage.setItem(IMAGE_MODE_KEY, mode);
-    } catch {
-      // Ignore — the choice just won't persist across visits.
-    }
+    saveImageMode(mode);
   }
 
   useEffect(() => {
@@ -175,8 +165,8 @@ export default function FeedClient() {
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
-        {back && (
+      {back && (
+        <div className="absolute left-4 top-4 z-10">
           <button
             onClick={goBack}
             aria-label="Back"
@@ -186,7 +176,10 @@ export default function FeedClient() {
               <path d="m15 18-6-6 6-6" />
             </svg>
           </button>
-        )}
+        </div>
+      )}
+
+      <div className="absolute bottom-4 left-4 z-10">
         <div className="flex overflow-hidden rounded-full border border-border bg-surface/80 text-xs backdrop-blur">
           {(["fit", "zoom"] as ImageFitMode[]).map((mode) => (
             <button

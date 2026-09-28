@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import type { PhotoWithTags, Tag, TagType } from "@/lib/types";
 import { photoImageUrl } from "@/lib/image-url";
 import MicButton from "@/components/MicButton";
+import { longCaption } from "@/lib/caption";
+import { loadImageMode, saveImageMode, type ImageFitMode } from "@/lib/image-mode";
 
 interface DetailPanelProps {
   photo: PhotoWithTags;
@@ -58,6 +60,35 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
   const [pendingEdit, setPendingEdit] = useState<{ tagId: number; name: string; oldName: string } | null>(null);
   const [editBusy, setEditBusy] = useState(false);
 
+  const [imageMode, setImageMode] = useState<ImageFitMode>("fit");
+  const [contextNotes, setContextNotes] = useState<string[]>([]);
+  const [aiDescriptionOpen, setAiDescriptionOpen] = useState(false);
+
+  useEffect(() => {
+    setImageMode(loadImageMode());
+  }, []);
+
+  function selectImageMode(mode: ImageFitMode) {
+    setImageMode(mode);
+    saveImageMode(mode);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    setAiDescriptionOpen(false);
+    fetch(`/api/photos/${photo.id}/context`)
+      .then((res) => (res.ok ? res.json() : { notes: [] }))
+      .then(({ notes }: { notes: { text: string }[] }) => {
+        if (!cancelled) setContextNotes(notes.map((n) => n.text));
+      })
+      .catch(() => {
+        if (!cancelled) setContextNotes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [photo.id]);
+
   useEffect(() => {
     return () => {
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -103,6 +134,8 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
   }, [onClose]);
 
   const eventTag = photo.tags.find((t) => t.type === "event");
+  const peopleNames = photo.tags.filter((t) => t.type === "person").map((t) => t.name);
+  const caption = longCaption({ eventName: eventTag?.name ?? null, placeName: photo.place_name, peopleNames });
 
   async function removeTag(tag: Tag) {
     setBusy(true);
@@ -247,6 +280,7 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
       if (!res.ok) throw new Error("Could not add context");
       const { photo: updated, new_tags: newTags } = await res.json();
       onPhotoChange(updated);
+      setContextNotes((prev) => [...prev, text]);
       setNewTagKeys(new Set((newTags as { name: string; type: string }[]).map((t) => `${t.type}:${t.name}`)));
       setContextText("");
       setContextOpen(false);
@@ -272,6 +306,7 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
       if (!res.ok) throw new Error("Could not undo");
       const { photo: updated } = await res.json();
       onPhotoChange(updated);
+      setContextNotes((prev) => prev.slice(0, -1));
     } catch (err) {
       setContextError(err instanceof Error ? err.message : "Something went wrong");
     }
@@ -283,7 +318,7 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
       <img
         src={photoImageUrl(photo, "display")}
         alt={photo.description ?? "Photo"}
-        className="absolute inset-0 h-full w-full object-contain"
+        className={`absolute inset-0 h-full w-full ${imageMode === "fit" ? "object-contain" : "object-cover"}`}
         draggable={false}
       />
 
@@ -292,42 +327,57 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
           e.stopPropagation();
           onClose();
         }}
-        aria-label="Close"
-        className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-text"
+        aria-label="Back"
+        className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-text"
       >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          className="h-5 w-5"
-        >
-          <path d="M6 6l12 12M18 6L6 18" />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+          <path d="m15 18-6-6 6-6" />
         </svg>
       </button>
+
+      <div
+        className="absolute bottom-3 left-3 z-10 flex overflow-hidden rounded-full border border-white/15 bg-black/50 text-xs backdrop-blur"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {(["fit", "zoom"] as ImageFitMode[]).map((mode) => (
+          <button
+            key={mode}
+            onClick={() => selectImageMode(mode)}
+            aria-pressed={imageMode === mode}
+            className={`px-3 py-1.5 font-medium capitalize transition-colors ${
+              imageMode === mode ? "bg-accent text-bg" : "text-text-muted"
+            }`}
+          >
+            {mode}
+          </button>
+        ))}
+      </div>
 
       <div
         className="absolute inset-x-0 bottom-0 flex max-h-[70vh] w-full flex-col gap-4 overflow-y-auto bg-gradient-to-t from-black/85 via-black/55 to-transparent px-5 pb-6 pt-20 backdrop-blur-md md:inset-x-auto md:inset-y-auto md:bottom-auto md:left-auto md:right-6 md:top-1/2 md:h-auto md:w-96 md:max-h-[80vh] md:-translate-y-1/2 md:rounded-2xl md:border md:border-white/10 md:bg-none md:bg-black/70 md:px-6 md:py-6 md:pt-6 md:shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div>
-          {eventTag && <p className="text-sm font-medium text-text">{eventTag.name}</p>}
-          <p className="text-xs text-text-muted">
-            {formatDate(photo.taken_at)}
-            {photo.place_name ? ` · ${photo.place_name}` : ""}
-          </p>
+          <p className="text-xs text-text-muted">{formatDate(photo.taken_at)}</p>
         </div>
 
-          {photo.ai_status === "done" && photo.description ? (
-            <p
-              className={`font-serif text-base leading-relaxed text-text transition-colors duration-1000 ${
+          {caption && <p className="font-serif text-base leading-relaxed text-text">{caption}</p>}
+
+          {contextNotes.length > 0 && (
+            <div
+              className={`flex flex-col gap-2 transition-colors duration-1000 ${
                 showUndo ? "rounded-lg bg-accent/15 px-2 py-1 -mx-2" : ""
               }`}
             >
-              {photo.description}
-            </p>
-          ) : (
+              {contextNotes.map((note, i) => (
+                <p key={i} className="text-sm leading-relaxed text-text">
+                  {note}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {!caption && contextNotes.length === 0 && (
             <p className="text-sm text-text-muted">
               No description yet —{" "}
               <a href="/settings" className="underline">
@@ -547,6 +597,31 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
               Add context
             </button>
           </div>
+
+          {photo.ai_status === "done" && photo.description && (
+            <div className="border-t border-white/10 pt-3">
+              <button
+                onClick={() => setAiDescriptionOpen((open) => !open)}
+                className="flex w-full items-center justify-between text-xs text-text-muted"
+              >
+                <span>{aiDescriptionOpen ? "Hide AI description" : "See AI description"}</span>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={`h-4 w-4 shrink-0 transition-transform ${aiDescriptionOpen ? "rotate-180" : ""}`}
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+              {aiDescriptionOpen && (
+                <p className="mt-2 text-xs leading-relaxed text-text-muted">{photo.description}</p>
+              )}
+            </div>
+          )}
         </div>
       </div>
   );

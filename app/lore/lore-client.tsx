@@ -352,8 +352,8 @@ export default function LoreClient() {
 
   return (
     <div className="flex min-h-[calc(100dvh-5rem)] flex-col">
-      <div className="flex flex-col gap-2 px-4 pb-2 pr-16 pt-4">
-        <div className="flex items-end gap-5">
+      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-2 px-4 pb-2 pr-16 pt-4 md:pr-4">
+        <div className="flex flex-wrap items-end justify-center gap-5">
           <div>
             <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">View</p>
             <select
@@ -380,11 +380,37 @@ export default function LoreClient() {
             </div>
           )}
 
+          {view === "map" && !trimmedQuery && candidateTypes.length > 0 && (
+            <div>
+              <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">Show</p>
+              <ShowToggle
+                options={candidateTypes.map((t) => ({ value: t, label: MAP_TYPE_LABEL[t], dot: MAP_TYPE_DOT[t] }))}
+                value={data?.effectiveType ?? show}
+                onChange={(v) => setParams({ show: v })}
+              />
+            </div>
+          )}
+
+          <div className="flex items-end gap-2">
+            <button
+              onClick={clearFilters}
+              className="rounded-full border border-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:text-text"
+            >
+              Clear filters
+            </button>
+            <button
+              onClick={saveFilter}
+              className="rounded-full border border-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:text-text"
+            >
+              Save filter
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={() => setSearchOpen((v) => !v)}
             aria-label="Search"
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface-2 text-text-muted transition-colors hover:text-text"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface-2 text-text-muted transition-colors hover:text-text"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
               <circle cx="11" cy="11" r="7" />
@@ -392,6 +418,26 @@ export default function LoreClient() {
             </svg>
           </button>
         </div>
+
+        {savedFilters.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {savedFilters.map((sf) => (
+              <span
+                key={sf.id}
+                className="flex items-center gap-1 rounded-full border border-border bg-surface-2 pl-2.5 pr-1 py-1 text-xs text-text"
+              >
+                <button onClick={() => applyFilter(sf)}>{sf.label}</button>
+                <button
+                  onClick={() => deleteFilter(sf.id)}
+                  aria-label={`Delete ${sf.label}`}
+                  className="px-1 text-text-muted hover:text-text"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
         {searchOpen && (
           <input
@@ -404,65 +450,24 @@ export default function LoreClient() {
           />
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={clearFilters}
-            className="rounded-full border border-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:text-text"
-          >
-            Clear filters
-          </button>
-          <button
-            onClick={saveFilter}
-            className="rounded-full border border-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:text-text"
-          >
-            Save filter
-          </button>
-          {savedFilters.map((sf) => (
-            <span
-              key={sf.id}
-              className="flex items-center gap-1 rounded-full border border-border bg-surface-2 pl-2.5 pr-1 py-1 text-xs text-text"
-            >
-              <button onClick={() => applyFilter(sf)}>{sf.label}</button>
-              <button
-                onClick={() => deleteFilter(sf.id)}
-                aria-label={`Delete ${sf.label}`}
-                className="px-1 text-text-muted hover:text-text"
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-
         {!trimmedQuery && view === "map" && (
-          <>
-            <div className="flex flex-wrap items-center gap-1 text-sm">
-              {crumbs.map((crumb, i) => {
-                const isCurrent = i === crumbs.length - 1;
-                return (
-                  <span key={crumb.path ?? "root"} className="flex items-center gap-1">
-                    {i > 0 && <span className="text-text-muted">/</span>}
-                    <button
-                      onClick={() => setParams({ path: crumb.path, show: null })}
-                      disabled={isCurrent}
-                      className={isCurrent ? "font-semibold text-text" : "text-text-muted hover:text-text"}
-                    >
-                      {crumb.label}
-                    </button>
-                  </span>
-                );
-              })}
-            </div>
-
-            <div>
-              <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">Show</p>
-              <ShowToggle
-                options={candidateTypes.map((t) => ({ value: t, label: MAP_TYPE_LABEL[t], dot: MAP_TYPE_DOT[t] }))}
-                value={data?.effectiveType ?? show}
-                onChange={(v) => setParams({ show: v })}
-              />
-            </div>
-          </>
+          <div className="flex flex-wrap items-center justify-center gap-1 text-sm">
+            {crumbs.map((crumb, i) => {
+              const isCurrent = i === crumbs.length - 1;
+              return (
+                <span key={crumb.path ?? "root"} className="flex items-center gap-1">
+                  {i > 0 && <span className="text-text-muted">/</span>}
+                  <button
+                    onClick={() => setParams({ path: crumb.path, show: null })}
+                    disabled={isCurrent}
+                    className={isCurrent ? "font-semibold text-text" : "text-text-muted hover:text-text"}
+                  >
+                    {crumb.label}
+                  </button>
+                </span>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -562,10 +567,15 @@ export default function LoreClient() {
           {!error && !yearParam && timelineYears && timelineYears.length > 0 && (
             <div className="flex flex-col">
               {timelineYears.map(({ year, count, tags, hasMore }) => (
-                <button
+                <div
                   key={year}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setParams({ year: String(year) })}
-                  className="flex flex-col gap-2 border-b border-border py-4 text-left"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") setParams({ year: String(year) });
+                  }}
+                  className="flex cursor-pointer flex-col gap-2 border-b border-border py-4 text-left"
                 >
                   <div>
                     <span className="text-3xl font-semibold text-text">{year}</span>
@@ -575,13 +585,17 @@ export default function LoreClient() {
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {tags.map((t) => (
-                      <span
+                      <button
                         key={t.value}
-                        className="flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-text"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openGrid({ path: `${start}:${t.value}`, year });
+                        }}
+                        className="flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-text transition-colors hover:border-accent"
                       >
                         <span className={`h-2 w-2 rounded-full ${START_DOT[start]}`} />
                         {t.value}
-                      </span>
+                      </button>
                     ))}
                     {hasMore && (
                       <span className="flex items-center rounded-full border border-border px-2.5 py-1 text-xs text-text-muted">
@@ -589,7 +603,7 @@ export default function LoreClient() {
                       </span>
                     )}
                   </div>
-                </button>
+                </div>
               ))}
 
               <button
@@ -609,11 +623,17 @@ export default function LoreClient() {
           {!error && yearParam && timelineMonths && timelineMonths.length > 0 && (
             <div className="flex flex-col">
               {timelineMonths.map(({ month, name, count, tags, hasMore }) => (
-                <button
+                <div
                   key={month}
-                  onClick={() => openGrid({ year: Number(yearParam), month })}
-                  disabled={gridLoading}
-                  className="flex flex-col gap-2 border-b border-border py-4 text-left disabled:opacity-60"
+                  role="button"
+                  tabIndex={gridLoading ? -1 : 0}
+                  onClick={() => !gridLoading && openGrid({ year: Number(yearParam), month })}
+                  onKeyDown={(e) => {
+                    if (!gridLoading && (e.key === "Enter" || e.key === " ")) openGrid({ year: Number(yearParam), month });
+                  }}
+                  className={`flex flex-col gap-2 border-b border-border py-4 text-left ${
+                    gridLoading ? "cursor-default opacity-60" : "cursor-pointer"
+                  }`}
                 >
                   <div>
                     <span className="text-lg font-medium text-text">{name}</span>
@@ -623,13 +643,17 @@ export default function LoreClient() {
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {tags.map((t) => (
-                      <span
+                      <button
                         key={t.value}
-                        className="flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-text"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openGrid({ path: `${start}:${t.value}`, year: Number(yearParam), month });
+                        }}
+                        className="flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-text transition-colors hover:border-accent"
                       >
                         <span className={`h-2 w-2 rounded-full ${START_DOT[start]}`} />
                         {t.value}
-                      </span>
+                      </button>
                     ))}
                     {hasMore && (
                       <span className="flex items-center rounded-full border border-border px-2.5 py-1 text-xs text-text-muted">
@@ -637,7 +661,7 @@ export default function LoreClient() {
                       </span>
                     )}
                   </div>
-                </button>
+                </div>
               ))}
 
               <button
@@ -654,17 +678,17 @@ export default function LoreClient() {
 
       {grid && (
         <div className="fixed inset-0 z-30 flex flex-col bg-bg md:left-20">
-          <div className="flex items-center justify-between px-4 py-4">
-            <p className="text-sm font-medium text-text">
-              {grid.photos.length} photo{grid.photos.length === 1 ? "" : "s"}
-            </p>
+          <div className="flex items-center gap-3 px-4 py-4">
             <button
               onClick={() => setGrid(null)}
               aria-label="Close"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface-2 text-text-muted hover:text-text"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface-2 text-text-muted hover:text-text"
             >
               ×
             </button>
+            <p className="text-sm font-medium text-text">
+              {grid.photos.length} photo{grid.photos.length === 1 ? "" : "s"}
+            </p>
           </div>
           <div className="grid flex-1 auto-rows-min grid-cols-3 gap-2 overflow-y-auto px-4 pb-4 sm:grid-cols-4 md:grid-cols-6">
             {grid.photos.map((p) => (

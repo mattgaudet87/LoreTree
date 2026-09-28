@@ -60,13 +60,13 @@ export default function TabBar() {
   return (
     <>
       <nav className="group fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/95 backdrop-blur md:inset-y-0 md:inset-x-auto md:left-0 md:top-0 md:flex md:w-20 md:flex-col md:border-r md:border-t-0 md:bg-surface/95 md:py-4 md:transition-[width] md:duration-200 md:hover:w-52">
-        <div className="mx-auto flex max-w-md items-stretch justify-around md:mx-0 md:max-w-none md:flex-1 md:flex-col md:items-stretch md:justify-start md:gap-1 md:px-2">
-          <Link href="/feed" className={`${linkClass(pathname?.startsWith("/feed") ?? false)} flex-1 flex-col md:flex-1 md:flex-row`}>
+        <div className="mx-auto flex max-w-md items-stretch justify-around md:mx-0 md:max-w-none md:flex-col md:items-stretch md:justify-start md:gap-1 md:px-2">
+          <Link href="/feed" className={`${linkClass(pathname?.startsWith("/feed") ?? false)} flex-1 flex-col md:flex-none md:flex-row`}>
             {HOME_ICON}
             <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Home</span>
           </Link>
 
-          <Link href="/lore" className={`${linkClass(pathname?.startsWith("/lore") ?? false)} flex-1 flex-col md:flex-1 md:flex-row`}>
+          <Link href="/lore" className={`${linkClass(pathname?.startsWith("/lore") ?? false)} flex-1 flex-col md:flex-none md:flex-row`}>
             {LORE_ICON}
             <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Lore</span>
           </Link>
@@ -74,18 +74,18 @@ export default function TabBar() {
           <button
             type="button"
             onClick={() => setAddLoreOpen(true)}
-            className={`${linkClass(pathname?.startsWith("/add-lore") ?? false)} flex-1 flex-col md:flex-1 md:flex-row`}
+            className={`${linkClass(pathname?.startsWith("/add-lore") ?? false)} flex-1 flex-col md:flex-none md:flex-row`}
           >
             {ADD_LORE_ICON}
             <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Add Lore</span>
           </button>
 
-          <Link href="/search" className={`${linkClass(pathname?.startsWith("/search") ?? false)} flex-1 flex-col md:flex-1 md:flex-row`}>
+          <Link href="/search" className={`${linkClass(pathname?.startsWith("/search") ?? false)} flex-1 flex-col md:flex-none md:flex-row`}>
             {SEARCH_ICON}
             <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Search</span>
           </Link>
 
-          <Link href="/profile" className={`${linkClass(pathname?.startsWith("/profile") ?? false)} flex-1 flex-col md:flex-1 md:flex-row`}>
+          <Link href="/profile" className={`${linkClass(pathname?.startsWith("/profile") ?? false)} flex-1 flex-col md:flex-none md:flex-row`}>
             {PROFILE_ICON}
             <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Profile</span>
           </Link>

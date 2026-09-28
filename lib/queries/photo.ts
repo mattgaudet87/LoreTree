@@ -229,6 +229,22 @@ export function maybeRenameAutoEvent(photoId: string, newName: string, userId = 
   }
 }
 
+export interface ContextNote {
+  id: number;
+  text: string;
+  created_at: string;
+}
+
+/** The raw text Matt wrote as context, oldest first — distinct from the AI-merged description. */
+export function getContextNotesForPhoto(photoId: string, userId = DEFAULT_USER_ID): ContextNote[] {
+  return db
+    .prepare(
+      `SELECT id, text, created_at FROM context_notes
+       WHERE photo_id = ? AND user_id = ? ORDER BY id ASC`
+    )
+    .all(photoId, userId) as ContextNote[];
+}
+
 export interface ContextNoteInput {
   text: string;
   inputMethod: string;

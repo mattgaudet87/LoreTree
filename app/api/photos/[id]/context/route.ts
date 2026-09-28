@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { mergeContext } from "@/lib/ai";
-import { addContextNote, getPhotoById } from "@/lib/queries/photo";
+import { addContextNote, getContextNotesForPhoto, getPhotoById } from "@/lib/queries/photo";
 
 const postSchema = z.object({
   text: z.string().min(1),
   input_method: z.enum(["text", "voice"]),
 });
+
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const notes = getContextNotesForPhoto(id);
+  return NextResponse.json({ notes });
+}
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

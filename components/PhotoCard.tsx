@@ -4,8 +4,10 @@ import { useRef, useState } from "react";
 import type { TouchEvent as ReactTouchEvent, MouseEvent as ReactMouseEvent } from "react";
 import type { PhotoWithTags } from "@/lib/types";
 import { photoImageUrl } from "@/lib/image-url";
+import { shortCaption } from "@/lib/caption";
+import type { ImageFitMode } from "@/lib/image-mode";
 
-export type ImageFitMode = "fit" | "zoom";
+export type { ImageFitMode };
 
 interface PhotoCardProps {
   photo: PhotoWithTags;
@@ -26,11 +28,6 @@ function touchDistance(touches: React.TouchList): number {
   const a = touches[0];
   const b = touches[1];
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-}
-
-function shorten(text: string, max = 70): string {
-  if (text.length <= max) return text;
-  return text.slice(0, max - 1).trimEnd() + "…";
 }
 
 function formatDate(iso: string | null): string {
@@ -112,9 +109,9 @@ export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail }
     onOpenDetail();
   }
 
-  const people = photo.tags.filter((t) => t.type === "person");
-  const others = photo.tags.filter((t) => t.type !== "person");
-  const chips = [...people, ...others].slice(0, 5);
+  const eventName = photo.tags.find((t) => t.type === "event")?.name ?? null;
+  const peopleNames = photo.tags.filter((t) => t.type === "person").map((t) => t.name);
+  const caption = shortCaption({ eventName, placeName: photo.place_name, peopleNames });
 
   return (
     <div
@@ -137,9 +134,16 @@ export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail }
         }}
         draggable={false}
       />
+
+      {photo.year && (
+        <span className="pointer-events-none absolute right-3 top-3 rounded-full border border-white/20 bg-black/50 px-2.5 py-1 text-xs font-medium text-text backdrop-blur">
+          {photo.year}
+        </span>
+      )}
+
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-4 pb-6 pt-16 md:inset-x-auto md:inset-y-auto md:bottom-6 md:right-6 md:left-auto md:top-auto md:w-80 md:max-w-[calc(100%-3rem)] md:rounded-2xl md:border md:border-white/10 md:bg-none md:bg-black/60 md:p-4 md:pt-4 md:backdrop-blur-md md:shadow-2xl">
-        {photo.ai_status === "done" && photo.description ? (
-          <p className="text-sm text-text">{shorten(photo.description)}</p>
+        {caption ? (
+          <p className="text-sm text-text">{caption}</p>
         ) : (
           <p className="pointer-events-auto text-sm text-text-muted">
             No description yet —{" "}
@@ -147,18 +151,6 @@ export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail }
               analyze it in Settings
             </a>
           </p>
-        )}
-        {chips.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {chips.slice(0, 3).map((tag) => (
-              <span
-                key={tag.id}
-                className="rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-xs text-text"
-              >
-                {tag.name}
-              </span>
-            ))}
-          </div>
         )}
         <div className="mt-2 flex items-center justify-between text-xs text-text-muted">
           <span>{formatDate(photo.taken_at)}</span>
