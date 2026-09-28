@@ -60,16 +60,6 @@ export function valueFilters(segments: PathSegment[]): ValueFilter[] {
     .map(({ nodeType, value }) => ({ nodeType, value }));
 }
 
-export function parseHidden(hidden: string | null | undefined): Set<NetworkNodeType> {
-  if (!hidden) return new Set();
-  return new Set(
-    hidden
-      .split(",")
-      .map((s) => s.trim())
-      .filter(isNetworkNodeType)
-  );
-}
-
 /**
  * Builds " AND ..." SQL fragments (with bound params) that restrict a
  * `photos p`-aliased query to rows matching every filter, AND-ed together.

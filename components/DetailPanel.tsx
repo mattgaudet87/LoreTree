@@ -24,6 +24,18 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
+async function fetchTagSuggestions(type: TagType, query: string): Promise<string[]> {
+  if (!query.trim()) return [];
+  try {
+    const res = await fetch(`/api/tags/suggest?type=${type}&q=${encodeURIComponent(query)}`);
+    if (!res.ok) return [];
+    const { suggestions } = (await res.json()) as { suggestions: string[] };
+    return suggestions;
+  } catch {
+    return [];
+  }
+}
+
 export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPanelProps) {
   const [newTagName, setNewTagName] = useState("");
   const [newTagType, setNewTagType] = useState<TagType>("person");
@@ -39,11 +51,48 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
   const [showUndo, setShowUndo] = useState(false);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [addSuggestions, setAddSuggestions] = useState<string[]>([]);
+  const [editingTagId, setEditingTagId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [editSuggestions, setEditSuggestions] = useState<string[]>([]);
+  const [pendingEdit, setPendingEdit] = useState<{ tagId: number; name: string; oldName: string } | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+
   useEffect(() => {
     return () => {
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchTagSuggestions(newTagType, newTagName).then((s) => {
+      if (!cancelled) setAddSuggestions(s.filter((name) => name.toLowerCase() !== newTagName.trim().toLowerCase()));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [newTagType, newTagName]);
+
+  const editingTag = editingTagId ? photo.tags.find((t) => t.id === editingTagId) ?? null : null;
+
+  useEffect(() => {
+    if (!editingTag) {
+      setEditSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    fetchTagSuggestions(editingTag.type, editingName).then((s) => {
+      if (!cancelled) {
+        setEditSuggestions(
+          s.filter((name) => name.toLowerCase() !== editingName.trim().toLowerCase() && name !== editingTag.name)
+        );
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [editingTag, editingName]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -70,8 +119,8 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
     }
   }
 
-  async function addTag() {
-    const name = newTagName.trim();
+  async function addTag(overrideName?: string) {
+    const name = (overrideName ?? newTagName).trim();
     if (!name) return;
     setBusy(true);
     setError(null);
@@ -85,10 +134,55 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
       const { tags } = await res.json();
       onPhotoChange({ ...photo, tags });
       setNewTagName("");
+      setAddSuggestions([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setBusy(false);
+    }
+  }
+
+  function startEditTag(tag: Tag) {
+    setEditingTagId(tag.id);
+    setEditingName(tag.name);
+    setPendingEdit(null);
+  }
+
+  function cancelEditTag() {
+    setEditingTagId(null);
+    setEditingName("");
+    setEditSuggestions([]);
+    setPendingEdit(null);
+  }
+
+  function saveEditTag() {
+    if (!editingTag) return;
+    const trimmed = editingName.trim();
+    if (!trimmed || trimmed === editingTag.name) {
+      cancelEditTag();
+      return;
+    }
+    setPendingEdit({ tagId: editingTag.id, name: trimmed, oldName: editingTag.name });
+  }
+
+  async function confirmEditTag(scope: "this" | "all") {
+    if (!pendingEdit) return;
+    setEditBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/photos/${photo.id}/tags/${pendingEdit.tagId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: pendingEdit.name, scope }),
+      });
+      if (!res.ok) throw new Error("Could not update tag");
+      const { tags } = await res.json();
+      onPhotoChange({ ...photo, tags });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setEditBusy(false);
+      cancelEditTag();
     }
   }
 
@@ -243,57 +337,147 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
           )}
 
           <div className="flex flex-wrap gap-2">
-            {photo.tags.map((tag) => (
-              <span
-                key={tag.id}
-                className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs text-text ${
-                  newTagKeys.has(`${tag.type}:${tag.name}`)
-                    ? "border-accent bg-accent/15"
-                    : "border-border bg-surface-2"
-                }`}
-              >
-                {tag.name}
-                {newTagKeys.has(`${tag.type}:${tag.name}`) && (
-                  <span className="text-[10px] uppercase text-accent">new</span>
-                )}
-                <button
-                  onClick={() => removeTag(tag)}
-                  disabled={busy}
-                  aria-label={`Remove ${tag.name}`}
-                  className="text-text-muted hover:text-text"
+            {photo.tags.map((tag) =>
+              editingTagId === tag.id ? (
+                <div key={tag.id} className="relative w-full">
+                  <div className="flex gap-2">
+                    <input
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveEditTag();
+                        if (e.key === "Escape") cancelEditTag();
+                      }}
+                      autoFocus
+                      className="flex-1 rounded-lg border border-accent bg-surface px-3 py-1.5 text-sm text-text"
+                    />
+                    <button
+                      onClick={saveEditTag}
+                      disabled={editBusy || !editingName.trim()}
+                      className="rounded-lg bg-accent px-3 text-sm font-medium text-bg disabled:opacity-40"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={cancelEditTag}
+                      className="rounded-lg border border-border px-3 text-sm text-text-muted"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  {editSuggestions.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1.5 rounded-lg border border-border bg-surface p-2">
+                      {editSuggestions.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => setEditingName(s)}
+                          className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-text hover:border-accent"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <span
+                  key={tag.id}
+                  className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs text-text ${
+                    newTagKeys.has(`${tag.type}:${tag.name}`)
+                      ? "border-accent bg-accent/15"
+                      : "border-border bg-surface-2"
+                  }`}
                 >
-                  ×
-                </button>
-              </span>
-            ))}
+                  <button onClick={() => startEditTag(tag)}>{tag.name}</button>
+                  {newTagKeys.has(`${tag.type}:${tag.name}`) && (
+                    <span className="text-[10px] uppercase text-accent">new</span>
+                  )}
+                  <button
+                    onClick={() => removeTag(tag)}
+                    disabled={busy}
+                    aria-label={`Remove ${tag.name}`}
+                    className="text-text-muted hover:text-text"
+                  >
+                    ×
+                  </button>
+                </span>
+              )
+            )}
           </div>
 
-          <div className="flex gap-2">
-            <select
-              value={newTagType}
-              onChange={(e) => setNewTagType(e.target.value as TagType)}
-              className="rounded-lg border border-border bg-surface px-2 text-xs text-text"
-            >
-              {ADDABLE_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-            <input
-              value={newTagName}
-              onChange={(e) => setNewTagName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addTag()}
-              placeholder="Add a tag"
-              className="flex-1 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text placeholder:text-text-muted"
-            />
-            <button
-              onClick={addTag}
-              disabled={busy || !newTagName.trim()}
-              className="rounded-lg bg-accent px-3 text-sm font-medium text-bg disabled:opacity-40"
-            >
-              Add
-            </button>
+          {pendingEdit && (
+            <div className="flex flex-col gap-2 rounded-xl border border-accent/40 bg-accent/10 px-3 py-3 text-sm text-text">
+              <p>
+                Rename &ldquo;{pendingEdit.oldName}&rdquo; to &ldquo;{pendingEdit.name}&rdquo; — just for this photo,
+                or everywhere it&apos;s used?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => confirmEditTag("this")}
+                  disabled={editBusy}
+                  className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-medium text-text disabled:opacity-40"
+                >
+                  Just this photo
+                </button>
+                <button
+                  onClick={() => confirmEditTag("all")}
+                  disabled={editBusy}
+                  className="flex-1 rounded-lg bg-accent px-3 py-2 text-xs font-medium text-bg disabled:opacity-40"
+                >
+                  All photos
+                </button>
+                <button
+                  onClick={cancelEditTag}
+                  disabled={editBusy}
+                  className="rounded-lg border border-border px-3 py-2 text-xs text-text-muted"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="relative">
+            <div className="flex gap-2">
+              <select
+                value={newTagType}
+                onChange={(e) => setNewTagType(e.target.value as TagType)}
+                className="rounded-lg border border-border bg-surface px-2 text-xs text-text"
+              >
+                {ADDABLE_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addTag()}
+                placeholder="Add a tag"
+                className="flex-1 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text placeholder:text-text-muted"
+              />
+              <button
+                onClick={() => addTag()}
+                disabled={busy || !newTagName.trim()}
+                className="rounded-lg bg-accent px-3 text-sm font-medium text-bg disabled:opacity-40"
+              >
+                Add
+              </button>
+            </div>
+            {addSuggestions.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1.5 rounded-lg border border-border bg-surface p-2">
+                {addSuggestions.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => addTag(s)}
+                    className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-text hover:border-accent"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {error && <p className="text-xs text-node-events">{error}</p>}

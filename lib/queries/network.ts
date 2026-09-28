@@ -1,50 +1,42 @@
 import { db, DEFAULT_USER_ID } from "@/lib/db";
-import { buildFilterSQL, parseHidden, parsePath, valueFilters, type ValueFilter } from "@/lib/queries/filters";
+import { buildFilterSQL, isNetworkNodeType, parsePath, valueFilters, type ValueFilter } from "@/lib/queries/filters";
 import type { NetworkNodeType } from "@/lib/types";
 
-const ALL_TYPES: NetworkNodeType[] = ["person", "category", "place", "event", "year"];
+// The Map view only ever drills through these four dimensions — never
+// "category", which doesn't have a place in the People/Location/Event/Date
+// taxonomy the map is built around. Order here is the default cascade order:
+// the first type in this list that isn't already used in the path, and
+// whose values actually help distinguish the current set of photos, is what
+// gets shown.
+export const MAP_TYPES: NetworkNodeType[] = ["person", "place", "event", "year"];
 
 const TYPE_LABELS: Record<NetworkNodeType, string> = {
   person: "People",
   category: "Categories",
-  place: "Places",
-  event: "Events",
-  year: "Years",
+  place: "Location",
+  event: "Event",
+  year: "Date",
 };
 
 export interface NetworkNode {
   type: NetworkNodeType;
-  value: string | null;
+  value: string;
+  label: string;
+  count: number;
+}
+
+export interface CenterNode {
+  type: NetworkNodeType;
+  value: string;
   label: string;
   count: number;
 }
 
 export interface NetworkResponse {
-  path: string;
-  center: NetworkNode | null;
-  nodes: NetworkNode[];
-  // Photos matching the path's value filters (ignoring any trailing "group"
-  // segment, which doesn't filter anything by itself). Powers the "View N
-  // photos" banner at every level, including the top (all photos).
   total: number;
-}
-
-function countPhotosForType(type: NetworkNodeType, userId: string): number {
-  if (type === "year") {
-    return (
-      db.prepare(`SELECT COUNT(*) as c FROM photos WHERE user_id = ? AND year IS NOT NULL`).get(userId) as {
-        c: number;
-      }
-    ).c;
-  }
-  return (
-    db
-      .prepare(
-        `SELECT COUNT(DISTINCT pt.photo_id) as c FROM photo_tags pt JOIN tags t ON t.id = pt.tag_id
-         WHERE pt.user_id = ? AND t.type = ?`
-      )
-      .get(userId, type) as { c: number }
-  ).c;
+  center: CenterNode | null;
+  effectiveType: NetworkNodeType | null;
+  nodes: NetworkNode[];
 }
 
 function countMatchingPhotos(filters: ValueFilter[], userId: string): number {
@@ -86,61 +78,50 @@ function valuesForType(
   return db.prepare(sql).all(...params) as { value: string; count: number }[];
 }
 
-export function getNetwork(
+// A breakdown only earns a spot on the map if it actually helps sort the
+// photos: more than one option, fewer options than photos (otherwise
+// you're just looking at one node per photo), and at least one option that
+// doesn't cover every single photo (otherwise every option is a no-op).
+function isHelpful(values: { count: number }[], total: number): boolean {
+  return values.length > 0 && values.length < total && values.some((v) => v.count < total);
+}
+
+export function getMapLevel(
   pathParam: string | null | undefined,
-  hiddenParam: string | null | undefined,
+  showParam: string | null | undefined,
   userId = DEFAULT_USER_ID
 ): NetworkResponse {
-  const segments = parsePath(pathParam);
-  const hidden = parseHidden(hiddenParam);
-  const path = pathParam ?? "";
-
-  if (segments.length === 0) {
-    const nodes = ALL_TYPES.filter((t) => !hidden.has(t)).map(
-      (type): NetworkNode => ({
-        type,
-        value: null,
-        label: TYPE_LABELS[type],
-        count: countPhotosForType(type, userId),
-      })
-    );
-    return { path, center: null, nodes, total: countMatchingPhotos([], userId) };
-  }
-
-  const last = segments[segments.length - 1];
+  const segments = parsePath(pathParam).filter((s): s is Extract<typeof s, { kind: "value" }> => s.kind === "value");
   const filters = valueFilters(segments);
   const total = countMatchingPhotos(filters, userId);
 
-  if (last.kind === "group") {
-    if (hidden.has(last.nodeType)) {
-      return { path, center: null, nodes: [], total };
+  const last = segments[segments.length - 1];
+  const center: CenterNode | null = last ? { type: last.nodeType, value: last.value, label: last.value, count: total } : null;
+
+  const usedTypes = new Set(segments.map((s) => s.nodeType));
+  const candidateTypes = MAP_TYPES.filter((t) => !usedTypes.has(t));
+
+  let effectiveType: NetworkNodeType | null = null;
+  let nodes: NetworkNode[] = [];
+
+  if (showParam && isNetworkNodeType(showParam) && candidateTypes.includes(showParam)) {
+    const values = valuesForType(showParam, filters, userId, 12);
+    effectiveType = showParam;
+    if (isHelpful(values, total)) {
+      nodes = values.map((v) => ({ type: showParam, value: v.value, label: v.value, count: v.count }));
     }
-    const values = valuesForType(last.nodeType, filters, userId, 12);
-    const nodes = values.map(
-      (v): NetworkNode => ({ type: last.nodeType, value: v.value, label: v.value, count: v.count })
-    );
-    return { path, center: null, nodes, total };
-  }
-
-  // last.kind === "value": this node is the center, sub-nodes are every
-  // other type/value found in its matching photos, top 10 combined by count.
-  const usedKeys = new Set(filters.map((f) => `${f.nodeType}:${f.value}`));
-  const center: NetworkNode = {
-    type: last.nodeType,
-    value: last.value,
-    label: last.value,
-    count: total,
-  };
-
-  const candidates: NetworkNode[] = [];
-  for (const type of ALL_TYPES) {
-    if (hidden.has(type)) continue;
-    for (const v of valuesForType(type, filters, userId, null)) {
-      if (usedKeys.has(`${type}:${v.value}`)) continue;
-      candidates.push({ type, value: v.value, label: v.value, count: v.count });
+  } else {
+    for (const type of candidateTypes) {
+      const values = valuesForType(type, filters, userId, 12);
+      if (isHelpful(values, total)) {
+        effectiveType = type;
+        nodes = values.map((v) => ({ type, value: v.value, label: v.value, count: v.count }));
+        break;
+      }
     }
   }
-  candidates.sort((a, b) => b.count - a.count);
 
-  return { path, center, nodes: candidates.slice(0, 10), total };
+  return { total, center, effectiveType, nodes };
 }
+
+export { TYPE_LABELS as MAP_TYPE_LABELS };

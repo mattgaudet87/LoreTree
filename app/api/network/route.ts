@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getNetwork } from "@/lib/queries/network";
+import { getMapLevel } from "@/lib/queries/network";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   try {
-    const result = getNetwork(searchParams.get("path"), searchParams.get("hidden"));
+    const result = getMapLevel(searchParams.get("path"), searchParams.get("show"));
     return NextResponse.json(result);
   } catch (err) {
     return NextResponse.json(

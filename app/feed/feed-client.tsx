@@ -9,12 +9,9 @@ import type { PhotoWithTags } from "@/lib/types";
 import { photoImageUrl } from "@/lib/image-url";
 import { formatWeekLabel } from "@/lib/queries/date-utils";
 
-type Mode = "random" | "event" | "person" | "year";
-
-const MODES: Mode[] = ["random", "event", "person", "year"];
 const IMAGE_MODE_KEY = "loretree:feed-image-mode";
 
-function filterLabel(filter: string | null, year: string | null, week: string | null): string | null {
+function filterLabel(filter: string | null, year: string | null, week: string | null, ids: string | null): string | null {
   if (filter) {
     return filter
       .split(",")
@@ -25,6 +22,7 @@ function filterLabel(filter: string | null, year: string | null, week: string | 
   if (year && week) return `${year} > ${formatWeekLabel(week)}`;
   if (year) return year;
   if (week) return formatWeekLabel(week);
+  if (ids) return "Filtered photos";
   return null;
 }
 
@@ -35,6 +33,8 @@ export default function FeedClient() {
   const year = searchParams.get("year");
   const week = searchParams.get("week");
   const start = searchParams.get("start");
+  const ids = searchParams.get("ids");
+  const back = searchParams.get("back");
 
   const [photos, setPhotos] = useState<PhotoWithTags[] | null>(null);
   const [index, setIndex] = useState(0);
@@ -43,8 +43,6 @@ export default function FeedClient() {
   // "fit" shows the whole photo, in its original orientation, letterboxed on
   // black. That's the default so nothing gets cropped unless Matt asks for it.
   const [imageMode, setImageMode] = useState<ImageFitMode>("fit");
-
-  const hasFilter = Boolean(filter || year || week);
 
   useEffect(() => {
     try {
@@ -74,6 +72,7 @@ export default function FeedClient() {
     if (filter) params.set("path", filter);
     if (year) params.set("year", year);
     if (week) params.set("week", week);
+    if (ids) params.set("ids", ids);
     params.set("limit", "200");
 
     fetch(`/api/feed?${params.toString()}`)
@@ -94,7 +93,7 @@ export default function FeedClient() {
     return () => {
       cancelled = true;
     };
-  }, [filter, year, week, start]);
+  }, [filter, year, week, start, ids]);
 
   // Preload the neighboring photos so next/previous feels instant.
   useEffect(() => {
@@ -159,15 +158,11 @@ export default function FeedClient() {
     withCooldown(() => (delta < 0 ? goNext() : goPrev()));
   }
 
-  function selectMode(mode: Mode) {
-    if (mode === "random") {
-      router.push("/feed");
-    } else {
-      router.push(`/network?path=group:${mode}`);
-    }
+  function goBack() {
+    router.push(back ? decodeURIComponent(back) : "/lore");
   }
 
-  const label = filterLabel(filter, year, week);
+  const label = filterLabel(filter, year, week, ids);
   const currentPhoto = photos?.[index] ?? null;
 
   function updatePhoto(updated: PhotoWithTags) {
@@ -180,37 +175,35 @@ export default function FeedClient() {
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      <div className="absolute left-4 top-4 z-10 flex overflow-hidden rounded-full border border-border bg-surface/80 text-xs backdrop-blur">
-        {(["fit", "zoom"] as ImageFitMode[]).map((mode) => (
+      <div className="absolute left-4 top-4 z-10 flex items-center gap-2">
+        {back && (
           <button
-            key={mode}
-            onClick={() => selectImageMode(mode)}
-            aria-pressed={imageMode === mode}
-            className={`px-3 py-1.5 font-medium capitalize transition-colors ${
-              imageMode === mode ? "bg-accent text-bg" : "text-text-muted"
-            }`}
+            onClick={goBack}
+            aria-label="Back"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface/80 text-text-muted backdrop-blur transition-colors hover:text-text"
           >
-            {mode}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </button>
-        ))}
-      </div>
-
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-4 pt-4">
-        <div className="pointer-events-auto flex justify-center gap-2">
-          {MODES.map((mode) => (
+        )}
+        <div className="flex overflow-hidden rounded-full border border-border bg-surface/80 text-xs backdrop-blur">
+          {(["fit", "zoom"] as ImageFitMode[]).map((mode) => (
             <button
               key={mode}
-              onClick={() => selectMode(mode)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-                mode === "random" && !hasFilter
-                  ? "bg-accent text-bg"
-                  : "border border-border bg-surface/80 text-text-muted backdrop-blur"
+              onClick={() => selectImageMode(mode)}
+              aria-pressed={imageMode === mode}
+              className={`px-3 py-1.5 font-medium capitalize transition-colors ${
+                imageMode === mode ? "bg-accent text-bg" : "text-text-muted"
               }`}
             >
               {mode}
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-4 pt-4">
         {label && (
           <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs text-text-muted backdrop-blur">
             <span>{label}</span>

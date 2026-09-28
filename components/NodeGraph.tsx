@@ -5,9 +5,12 @@ import type { NetworkNodeType } from "@/lib/types";
 import type { NetworkNode } from "@/lib/queries/network";
 
 interface NodeGraphProps {
-  center: NetworkNode | null;
+  centerLabel: string;
+  centerCount: number;
+  centerColor: string;
   nodes: NetworkNode[];
   onSelect: (node: NetworkNode) => void;
+  onViewImages: () => void;
 }
 
 const TYPE_COLOR: Record<NetworkNodeType, string> = {
@@ -35,50 +38,47 @@ function nodeSizePct(count: number, isCenter: boolean): number {
   return grown;
 }
 
-export default function NodeGraph({ center, nodes, onSelect }: NodeGraphProps) {
-  const ringRadiusPct = center ? 36 : 34;
+export default function NodeGraph({ centerLabel, centerCount, centerColor, nodes, onSelect, onViewImages }: NodeGraphProps) {
+  const ringRadiusPct = 36;
 
   return (
     <div className="relative mx-auto aspect-square w-full max-w-[420px]">
       <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-        {center &&
-          nodes.map((node, i) => {
-            const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
-            const x = 50 + ringRadiusPct * Math.cos(angle);
-            const y = 50 + ringRadiusPct * Math.sin(angle);
-            return (
-              <line
-                key={`${node.type}:${node.value}`}
-                x1={50}
-                y1={50}
-                x2={x}
-                y2={y}
-                stroke={TYPE_COLOR[node.type]}
-                strokeWidth={0.4}
-                strokeOpacity={0.5}
-              />
-            );
-          })}
+        {nodes.map((node, i) => {
+          const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
+          const x = 50 + ringRadiusPct * Math.cos(angle);
+          const y = 50 + ringRadiusPct * Math.sin(angle);
+          return (
+            <line
+              key={`${node.type}:${node.value}`}
+              x1={50}
+              y1={50}
+              x2={x}
+              y2={y}
+              stroke={TYPE_COLOR[node.type]}
+              strokeWidth={0.4}
+              strokeOpacity={0.5}
+            />
+          );
+        })}
       </svg>
 
-      {center && (
-        <motion.button
-          layout
-          onClick={() => onSelect(center)}
-          className="absolute flex flex-col items-center justify-center rounded-full border-2 bg-surface-2 text-center"
-          style={{
-            left: "50%",
-            top: "50%",
-            width: `${nodeSizePct(center.count, true)}%`,
-            aspectRatio: "1 / 1",
-            transform: "translate(-50%, -50%)",
-            borderColor: TYPE_COLOR[center.type],
-          }}
-        >
-          <span className="px-1 text-sm font-medium text-text">{shortenName(center.label)}</span>
-          <span className="text-xs text-text-muted">{center.count}</span>
-        </motion.button>
-      )}
+      <motion.button
+        layout
+        onClick={onViewImages}
+        className="absolute flex flex-col items-center justify-center rounded-full border-2 bg-surface-2 text-center"
+        style={{
+          left: "50%",
+          top: "50%",
+          width: `${nodeSizePct(centerCount, true)}%`,
+          aspectRatio: "1 / 1",
+          transform: "translate(-50%, -50%)",
+          borderColor: centerColor,
+        }}
+      >
+        <span className="px-1 text-sm font-medium text-text">{shortenName(centerLabel)}</span>
+        <span className="text-xs text-text-muted">{centerCount}</span>
+      </motion.button>
 
       {nodes.map((node, i) => {
         const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
@@ -88,7 +88,7 @@ export default function NodeGraph({ center, nodes, onSelect }: NodeGraphProps) {
 
         return (
           <motion.button
-            key={`${node.type}:${node.value ?? "group"}`}
+            key={`${node.type}:${node.value}`}
             layout
             onClick={() => onSelect(node)}
             className="absolute flex flex-col items-center justify-center rounded-full border bg-surface text-center shadow-sm"

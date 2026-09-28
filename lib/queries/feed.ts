@@ -6,7 +6,9 @@ import type { PhotoRow, PhotoWithTags } from "@/lib/types";
 export interface FeedOptions {
   path?: string | null;
   year?: number | null;
+  month?: number | null;
   week?: string | null;
+  ids?: string[] | null;
   limit?: number;
   userId?: string;
 }
@@ -29,11 +31,22 @@ export function getFeed(options: FeedOptions = {}): PhotoWithTags[] {
     params.push(options.week);
   }
 
+  if (options.month !== null && options.month !== undefined) {
+    sql += " AND p.month = ?";
+    params.push(options.month);
+  }
+
+  if (options.ids && options.ids.length > 0) {
+    sql += ` AND p.id IN (${options.ids.map(() => "?").join(", ")})`;
+    params.push(...options.ids);
+  }
+
   const { sql: filterSql, params: filterParams } = buildFilterSQL(filters, userId, "p");
   sql += filterSql;
   params.push(...filterParams);
 
-  const isFiltered = filters.length > 0 || !!options.week;
+  const isFiltered =
+    filters.length > 0 || !!options.week || !!options.ids?.length || (options.month !== null && options.month !== undefined);
   sql += isFiltered ? " ORDER BY p.taken_at DESC" : " ORDER BY RANDOM()";
   sql += " LIMIT ?";
   params.push(limit);

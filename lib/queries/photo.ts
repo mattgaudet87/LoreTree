@@ -127,6 +127,79 @@ export function removePhotoTag(photoId: string, tagId: number, userId = DEFAULT_
 }
 
 /**
+ * Renames a tag. "all" renames the shared tag row, so every photo that
+ * carries it sees the new name (merging into an existing tag of that name
+ * if one already exists, rather than violating the unique constraint).
+ * "this" instead detaches just this photo from the old tag and attaches it
+ * to a find-or-created tag with the new name, leaving every other photo's
+ * tag untouched.
+ */
+export function editPhotoTag(
+  photoId: string,
+  tagId: number,
+  newName: string,
+  scope: "this" | "all",
+  userId = DEFAULT_USER_ID
+): Tag[] {
+  const trimmed = newName.trim();
+  if (!trimmed) {
+    throw new Error("Tag name cannot be empty");
+  }
+
+  const tag = db.prepare(`SELECT id, type, name FROM tags WHERE id = ? AND user_id = ?`).get(tagId, userId) as
+    | { id: number; type: TagType; name: string }
+    | undefined;
+  if (!tag) {
+    throw new Error("Tag not found");
+  }
+
+  if (scope === "all") {
+    if (tag.name !== trimmed) {
+      const existing = db
+        .prepare(`SELECT id FROM tags WHERE user_id = ? AND type = ? AND name = ? AND id != ?`)
+        .get(userId, tag.type, trimmed, tag.id) as { id: number } | undefined;
+
+      if (existing) {
+        db.prepare(`UPDATE OR IGNORE photo_tags SET tag_id = ? WHERE tag_id = ? AND user_id = ?`).run(
+          existing.id,
+          tag.id,
+          userId
+        );
+        db.prepare(`DELETE FROM photo_tags WHERE tag_id = ? AND user_id = ?`).run(tag.id, userId);
+        db.prepare(`DELETE FROM tags WHERE id = ? AND user_id = ?`).run(tag.id, userId);
+      } else {
+        db.prepare(`UPDATE tags SET name = ? WHERE id = ? AND user_id = ?`).run(trimmed, tag.id, userId);
+      }
+    }
+  } else {
+    const newTagId = getOrCreateTag(trimmed, tag.type, userId);
+    if (newTagId !== tag.id) {
+      db.prepare(`DELETE FROM photo_tags WHERE photo_id = ? AND tag_id = ? AND user_id = ?`).run(
+        photoId,
+        tag.id,
+        userId
+      );
+      db.prepare(
+        `INSERT OR IGNORE INTO photo_tags (photo_id, tag_id, user_id, source) VALUES (?, ?, ?, 'user')`
+      ).run(photoId, newTagId, userId);
+    }
+  }
+
+  return getTagsForPhoto(photoId, userId);
+}
+
+export function suggestTags(query: string, type: TagType, userId = DEFAULT_USER_ID, limit = 8): string[] {
+  const q = query.trim();
+  if (!q) return [];
+  const rows = db
+    .prepare(
+      `SELECT name FROM tags WHERE user_id = ? AND type = ? AND name LIKE ? COLLATE NOCASE ORDER BY name ASC LIMIT ?`
+    )
+    .all(userId, type, `%${q}%`, limit) as { name: string }[];
+  return rows.map((r) => r.name);
+}
+
+/**
  * Renames a photo's event tag to a better AI-suggested name, but only if
  * the event still has its automatic name (source "apple"). Never touches
  * an event Matt has renamed himself. If another event already has that

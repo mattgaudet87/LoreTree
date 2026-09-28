@@ -28,7 +28,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.variable} ${fraunces.variable} bg-bg text-text antialiased`}>
         <SettingsLink />
-        <main className="min-h-dvh pb-20">{children}</main>
+        <main className="min-h-dvh pb-20 md:pb-0 md:pl-20">{children}</main>
         <TabBar />
       </body>
     </html>
