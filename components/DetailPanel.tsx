@@ -122,47 +122,46 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-bg/95 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-30 bg-black" onClick={onClose}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={photoImageUrl(photo, "display")}
+        alt={photo.description ?? "Photo"}
+        className="absolute inset-0 h-full w-full object-contain"
+        draggable={false}
+      />
+
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        aria-label="Close"
+        className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-text"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          className="h-5 w-5"
+        >
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
+
       <div
-        className="mx-auto flex h-full w-full max-w-md flex-col overflow-y-auto"
+        className="absolute inset-x-0 bottom-0 flex max-h-[70vh] w-full flex-col gap-4 overflow-y-auto bg-gradient-to-t from-black/85 via-black/55 to-transparent px-5 pb-6 pt-20 backdrop-blur-md md:inset-y-0 md:left-auto md:right-0 md:top-0 md:h-full md:w-96 md:max-h-none md:bg-gradient-to-l md:from-black/85 md:via-black/55 md:to-transparent md:pt-20"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative max-h-[60vh] w-full shrink-0 cursor-pointer bg-black" onClick={onClose}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={photoImageUrl(photo, "display")}
-            alt={photo.description ?? "Photo"}
-            className="block max-h-[60vh] w-full object-contain"
-          />
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            aria-label="Close"
-            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-text"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              className="h-5 w-5"
-            >
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
+        <div>
+          {eventTag && <p className="text-sm font-medium text-text">{eventTag.name}</p>}
+          <p className="text-xs text-text-muted">
+            {formatDate(photo.taken_at)}
+            {photo.place_name ? ` · ${photo.place_name}` : ""}
+          </p>
         </div>
-
-        <div className="flex flex-1 flex-col gap-4 px-5 py-5">
-          <div>
-            {eventTag && <p className="text-sm font-medium text-text">{eventTag.name}</p>}
-            <p className="text-xs text-text-muted">
-              {formatDate(photo.taken_at)}
-              {photo.place_name ? ` · ${photo.place_name}` : ""}
-            </p>
-          </div>
 
           {photo.ai_status === "done" && photo.description ? (
             <p className="font-serif text-base leading-relaxed text-text">{photo.description}</p>
@@ -248,6 +247,6 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
           </div>
         </div>
       </div>
-    </div>
   );
 }
+
