@@ -7,6 +7,7 @@ import path from "path";
 import sharp from "sharp";
 import { db, DEFAULT_USER_ID } from "../lib/db";
 import { categoryForAppleLabel } from "../lib/categories";
+import { formatEventDateLabel, weekStartOf } from "../lib/queries/date-utils";
 import type { TagType } from "../lib/types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -17,18 +18,9 @@ const PEOPLE = ["Alex", "Jordan", "Sam", "Priya"];
 const PLACES = ["Kelowna", "Vancouver", "Banff", "Toronto"];
 const APPLE_LABELS = ["beach", "hiking", "birthday", "food", "flower", "concert", "family", "friends"];
 const KEYWORDS = ["sunset", "hike", "roadtrip", "garden party", "snow day"];
-const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function weekStartOf(dateStr: string): string {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  const day = d.getUTCDay(); // 0 = Sunday
-  d.setUTCDate(d.getUTCDate() - day);
-  return d.toISOString().slice(0, 10);
-}
 
 function eventName(dateStr: string, place: string): string {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  return `${place}, ${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()} ${d.getUTCFullYear()}`;
+  return `${place}, ${formatEventDateLabel(dateStr)}`;
 }
 
 function pick<T>(arr: T[], n: number): T[] {

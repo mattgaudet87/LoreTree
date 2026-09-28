@@ -44,4 +44,5 @@ next-env.d.ts
 # LoreTree data — photos and database, never commit
 /data/
 *.db
+osxphotos_crash.log
 
