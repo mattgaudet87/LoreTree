@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #111013;
+  --surface: #1b1a1e;
+  --surface-2: #25232a;
+  --border: #34313a;
+  --text: #f4f1ec;
+  --text-muted: #9a958f;
+  --accent: #8b7cff;
+  --node-people: #8b7cff;
+  --node-categories: #3ccb9a;
+  --node-places: #ff8a5b;
+  --node-events: #f5b942;
+  --node-years: #9a958f;
+  --banner-from: #6d5dfc;
+  --banner-to: #ff6fa3;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-node-people: var(--node-people);
+  --color-node-categories: var(--node-categories);
+  --color-node-places: var(--node-places);
+  --color-node-events: var(--node-events);
+  --color-node-years: var(--node-years);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-fraunces);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans), sans-serif;
+}
+
+.banner-gradient {
+  background-image: linear-gradient(90deg, var(--banner-from), var(--banner-to));
+}
