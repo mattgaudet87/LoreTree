@@ -13,10 +13,17 @@ const HIGHLIGHT_SCORE_SQL = `(
   + (CASE WHEN (SELECT COUNT(*) FROM context_notes cn_hs WHERE cn_hs.photo_id = p.id AND cn_hs.user_id = p.user_id) > 0 THEN 2 ELSE 0 END)
 )`;
 
+export interface HighlightPhoto {
+  id: string;
+  thumb_path: string | null;
+  is_favorite: boolean;
+  image_version: string | null;
+}
+
 export interface YearSummary {
   year: number;
   count: number;
-  highlights: { id: string; thumb_path: string | null; is_favorite: boolean }[];
+  highlights: HighlightPhoto[];
 }
 
 export function getLifetimeTimeline(userId = DEFAULT_USER_ID): YearSummary[] {
@@ -27,7 +34,7 @@ export function getLifetimeTimeline(userId = DEFAULT_USER_ID): YearSummary[] {
     .all(userId) as { year: number; count: number }[];
 
   const highlightStmt = db.prepare(
-    `SELECT p.id, p.thumb_path, p.is_favorite FROM photos p
+    `SELECT p.id, p.thumb_path, p.is_favorite, p.images_updated_at FROM photos p
      WHERE p.user_id = ? AND p.year = ?
      ORDER BY ${HIGHLIGHT_SCORE_SQL} DESC, p.taken_at DESC
      LIMIT 3`
@@ -36,9 +43,19 @@ export function getLifetimeTimeline(userId = DEFAULT_USER_ID): YearSummary[] {
   return years.map(({ year, count }) => ({
     year,
     count,
-    highlights: (highlightStmt.all(userId, year) as { id: string; thumb_path: string | null; is_favorite: number }[]).map(
-      (h) => ({ id: h.id, thumb_path: h.thumb_path, is_favorite: !!h.is_favorite })
-    ),
+    highlights: (
+      highlightStmt.all(userId, year) as {
+        id: string;
+        thumb_path: string | null;
+        is_favorite: number;
+        images_updated_at: string | null;
+      }[]
+    ).map((h) => ({
+      id: h.id,
+      thumb_path: h.thumb_path,
+      is_favorite: !!h.is_favorite,
+      image_version: h.images_updated_at,
+    })),
   }));
 }
 
@@ -46,7 +63,9 @@ export interface WeekSummary {
   week_start: string;
   label: string;
   count: number;
+  id: string | null;
   thumb_path: string | null;
+  image_version: string | null;
 }
 
 export interface MonthSummary {
@@ -76,7 +95,7 @@ export function getYearTimeline(year: number, userId = DEFAULT_USER_ID): YearTim
   );
 
   const weekThumbStmt = db.prepare(
-    `SELECT p.thumb_path FROM photos p
+    `SELECT p.id, p.thumb_path, p.images_updated_at FROM photos p
      WHERE p.user_id = ? AND p.year = ? AND p.month = ? AND p.week_start = ?
      ORDER BY ${HIGHLIGHT_SCORE_SQL} DESC, p.taken_at DESC
      LIMIT 1`
@@ -86,13 +105,15 @@ export function getYearTimeline(year: number, userId = DEFAULT_USER_ID): YearTim
     const weekRows = weekStmt.all(userId, year, month) as { week_start: string; count: number }[];
     const weeks: WeekSummary[] = weekRows.map((w) => {
       const thumb = weekThumbStmt.get(userId, year, month, w.week_start) as
-        | { thumb_path: string | null }
+        | { id: string; thumb_path: string | null; images_updated_at: string | null }
         | undefined;
       return {
         week_start: w.week_start,
         label: formatWeekLabel(w.week_start),
         count: w.count,
+        id: thumb?.id ?? null,
         thumb_path: thumb?.thumb_path ?? null,
+        image_version: thumb?.images_updated_at ?? null,
       };
     });
     const count = weeks.reduce((sum, w) => sum + w.count, 0);

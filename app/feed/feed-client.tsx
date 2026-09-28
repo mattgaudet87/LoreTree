@@ -7,6 +7,7 @@ import PhotoCard, { type ImageFitMode } from "@/components/PhotoCard";
 import DetailPanel from "@/components/DetailPanel";
 import type { PhotoWithTags } from "@/lib/types";
 import { photoImageUrl } from "@/lib/image-url";
+import { formatWeekLabel } from "@/lib/queries/date-utils";
 
 type Mode = "random" | "event" | "person" | "year";
 
@@ -21,8 +22,9 @@ function filterLabel(filter: string | null, year: string | null, week: string | 
       .filter(Boolean)
       .join(" > ");
   }
+  if (year && week) return `${year} > ${formatWeekLabel(week)}`;
   if (year) return year;
-  if (week) return week;
+  if (week) return formatWeekLabel(week);
   return null;
 }
 
