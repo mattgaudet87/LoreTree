@@ -23,6 +23,10 @@ export interface NetworkResponse {
   path: string;
   center: NetworkNode | null;
   nodes: NetworkNode[];
+  // Photos matching the path's value filters (ignoring any trailing "group"
+  // segment, which doesn't filter anything by itself). Powers the "View N
+  // photos" banner at every level, including the top (all photos).
+  total: number;
 }
 
 function countPhotosForType(type: NetworkNodeType, userId: string): number {
@@ -100,21 +104,22 @@ export function getNetwork(
         count: countPhotosForType(type, userId),
       })
     );
-    return { path, center: null, nodes };
+    return { path, center: null, nodes, total: countMatchingPhotos([], userId) };
   }
 
   const last = segments[segments.length - 1];
   const filters = valueFilters(segments);
+  const total = countMatchingPhotos(filters, userId);
 
   if (last.kind === "group") {
     if (hidden.has(last.nodeType)) {
-      return { path, center: null, nodes: [] };
+      return { path, center: null, nodes: [], total };
     }
     const values = valuesForType(last.nodeType, filters, userId, 12);
     const nodes = values.map(
       (v): NetworkNode => ({ type: last.nodeType, value: v.value, label: v.value, count: v.count })
     );
-    return { path, center: null, nodes };
+    return { path, center: null, nodes, total };
   }
 
   // last.kind === "value": this node is the center, sub-nodes are every
@@ -124,7 +129,7 @@ export function getNetwork(
     type: last.nodeType,
     value: last.value,
     label: last.value,
-    count: countMatchingPhotos(filters, userId),
+    count: total,
   };
 
   const candidates: NetworkNode[] = [];
@@ -137,5 +142,5 @@ export function getNetwork(
   }
   candidates.sort((a, b) => b.count - a.count);
 
-  return { path, center, nodes: candidates.slice(0, 10) };
+  return { path, center, nodes: candidates.slice(0, 10), total };
 }
