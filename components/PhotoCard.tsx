@@ -137,7 +137,7 @@ export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail }
         }}
         draggable={false}
       />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-4 pb-6 pt-16">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-4 pb-6 pt-16 md:inset-x-auto md:inset-y-auto md:bottom-6 md:right-6 md:left-auto md:top-auto md:w-80 md:max-w-[calc(100%-3rem)] md:rounded-2xl md:border md:border-white/10 md:bg-none md:bg-black/60 md:p-4 md:pt-4 md:backdrop-blur-md md:shadow-2xl">
         {photo.ai_status === "done" && photo.description ? (
           <p className="text-sm text-text">{shorten(photo.description)}</p>
         ) : (
@@ -150,7 +150,7 @@ export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail }
         )}
         {chips.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {chips.map((tag) => (
+            {chips.slice(0, 3).map((tag) => (
               <span
                 key={tag.id}
                 className="rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-xs text-text"

@@ -152,7 +152,7 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
       </button>
 
       <div
-        className="absolute inset-x-0 bottom-0 flex max-h-[70vh] w-full flex-col gap-4 overflow-y-auto bg-gradient-to-t from-black/85 via-black/55 to-transparent px-5 pb-6 pt-20 backdrop-blur-md md:inset-y-0 md:left-auto md:right-0 md:top-0 md:h-full md:w-96 md:max-h-none md:bg-gradient-to-l md:from-black/85 md:via-black/55 md:to-transparent md:pt-20"
+        className="absolute inset-x-0 bottom-0 flex max-h-[70vh] w-full flex-col gap-4 overflow-y-auto bg-gradient-to-t from-black/85 via-black/55 to-transparent px-5 pb-6 pt-20 backdrop-blur-md md:inset-x-auto md:inset-y-auto md:bottom-auto md:left-auto md:right-6 md:top-1/2 md:h-auto md:w-96 md:max-h-[80vh] md:-translate-y-1/2 md:rounded-2xl md:border md:border-white/10 md:bg-none md:bg-black/70 md:px-6 md:py-6 md:pt-6 md:shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div>
