@@ -125,6 +125,36 @@ export function removePhotoTag(photoId: string, tagId: number, userId = DEFAULT_
   return getTagsForPhoto(photoId, userId);
 }
 
+/**
+ * Renames a photo's event tag to a better AI-suggested name, but only if
+ * the event still has its automatic name (source "apple"). Never touches
+ * an event Matt has renamed himself. If another event already has that
+ * name, merges into it instead of violating the unique tag constraint.
+ */
+export function maybeRenameAutoEvent(photoId: string, newName: string, userId = DEFAULT_USER_ID): void {
+  const trimmed = newName.trim();
+  if (!trimmed) return;
+
+  const eventTag = getTagsForPhoto(photoId, userId).find((t) => t.type === "event");
+  if (!eventTag || eventTag.source !== "apple" || eventTag.name === trimmed) return;
+
+  const existing = db
+    .prepare(`SELECT id FROM tags WHERE user_id = ? AND type = 'event' AND name = ? AND id != ?`)
+    .get(userId, trimmed, eventTag.id) as { id: number } | undefined;
+
+  if (existing) {
+    db.prepare(`UPDATE OR IGNORE photo_tags SET tag_id = ? WHERE tag_id = ? AND user_id = ?`).run(
+      existing.id,
+      eventTag.id,
+      userId
+    );
+    db.prepare(`DELETE FROM photo_tags WHERE tag_id = ? AND user_id = ?`).run(eventTag.id, userId);
+    db.prepare(`DELETE FROM tags WHERE id = ? AND user_id = ?`).run(eventTag.id, userId);
+  } else {
+    db.prepare(`UPDATE tags SET name = ? WHERE id = ? AND user_id = ?`).run(trimmed, eventTag.id, userId);
+  }
+}
+
 /** favorite x3 + apple_score + people count x0.5 + (has context note) x2 */
 export function highlightScore(photoId: string, userId = DEFAULT_USER_ID): number {
   const row = db
