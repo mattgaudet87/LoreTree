@@ -33,6 +33,7 @@ export interface PhotoRow {
   width: number | null;
   height: number | null;
   imported_at: string;
+  images_updated_at: string | null;
 }
 
 export interface PhotoSummary {
@@ -43,6 +44,11 @@ export interface PhotoSummary {
   description: string | null;
   thumb_path: string | null;
   display_path: string | null;
+  // Changes whenever the importer regenerates this photo's image files (e.g.
+  // an orientation fix). Append as a query param on image URLs so browsers
+  // fetch fresh bytes instead of serving an old cached copy from the same
+  // /api/images/{id} address.
+  image_version: string | null;
 }
 
 export interface PhotoWithTags extends PhotoSummary {

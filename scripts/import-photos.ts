@@ -83,10 +83,10 @@ function linkTag(photoId: string, tagId: number) {
 const upsertPhoto = db.prepare(`
   INSERT INTO photos (
     id, user_id, taken_at, year, month, week_start, place_name, latitude, longitude,
-    is_favorite, apple_score, display_path, thumb_path, width, height, imported_at
+    is_favorite, apple_score, display_path, thumb_path, width, height, imported_at, images_updated_at
   ) VALUES (
     @id, @user_id, @taken_at, @year, @month, @week_start, @place_name, @latitude, @longitude,
-    @is_favorite, @apple_score, @display_path, @thumb_path, @width, @height, datetime('now')
+    @is_favorite, @apple_score, @display_path, @thumb_path, @width, @height, datetime('now'), datetime('now')
   )
   ON CONFLICT(id) DO UPDATE SET
     taken_at = excluded.taken_at,
@@ -101,7 +101,8 @@ const upsertPhoto = db.prepare(`
     display_path = excluded.display_path,
     thumb_path = excluded.thumb_path,
     width = excluded.width,
-    height = excluded.height
+    height = excluded.height,
+    images_updated_at = datetime('now')
 `);
 // Note: description, ai_status, ai_error, analyzed_at, and is_profile are
 // intentionally left untouched on conflict — re-importing metadata should
@@ -203,13 +204,19 @@ async function main() {
     const displayPath = path.join(DISPLAY_DIR, `${record.uuid}.jpg`);
     const thumbPath = path.join(THUMB_DIR, `${record.uuid}.jpg`);
 
+    // .rotate() with no arguments bakes in the EXIF orientation (e.g. a
+    // portrait photo taken with the phone turned sideways) before resizing.
+    // Without it, sharp keeps the sensor's raw pixel orientation and strips
+    // the EXIF tag that would have told browsers how to display it upright.
     await sharp(exportedPath)
+      .rotate()
       .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
       .jpeg({ quality: 85 })
       .toFile(displayPath);
     const displayMeta = await sharp(displayPath).metadata();
 
     await sharp(exportedPath)
+      .rotate()
       .resize(400, 400, { fit: "inside", withoutEnlargement: true })
       .jpeg({ quality: 80 })
       .toFile(thumbPath);

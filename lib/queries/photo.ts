@@ -13,6 +13,7 @@ export function toPhotoWithTags(row: PhotoRow, tags: Tag[]): PhotoWithTags {
     place_name: row.place_name,
     ai_status: row.ai_status,
     is_profile: !!row.is_profile,
+    image_version: row.images_updated_at,
     tags,
   };
 }

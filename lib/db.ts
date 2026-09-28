@@ -43,7 +43,8 @@ db.exec(`
     thumb_path TEXT,
     width INTEGER,
     height INTEGER,
-    imported_at TEXT NOT NULL DEFAULT (datetime('now'))
+    imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+    images_updated_at TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_photos_user ON photos(user_id);
@@ -110,5 +111,13 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_reminisce_messages_session ON reminisce_messages(session_id);
 `);
+
+// CREATE TABLE IF NOT EXISTS doesn't add columns to a table that already
+// exists, so a database created before this column was added needs it
+// bolted on directly.
+const photoColumns = db.prepare(`PRAGMA table_info(photos)`).all() as { name: string }[];
+if (!photoColumns.some((c) => c.name === "images_updated_at")) {
+  db.exec(`ALTER TABLE photos ADD COLUMN images_updated_at TEXT`);
+}
 
 export const DEFAULT_USER_ID = "matt";
