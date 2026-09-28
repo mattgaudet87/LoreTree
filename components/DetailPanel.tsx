@@ -6,6 +6,8 @@ import { photoImageUrl } from "@/lib/image-url";
 import MicButton from "@/components/MicButton";
 import { longCaption } from "@/lib/caption";
 import { loadImageMode, saveImageMode, type ImageFitMode } from "@/lib/image-mode";
+import { CATEGORIES } from "@/lib/categories";
+import { ADDABLE_TAG_TYPES } from "@/lib/tag-types";
 
 interface DetailPanelProps {
   photo: PhotoWithTags;
@@ -13,9 +15,13 @@ interface DetailPanelProps {
   onPhotoChange: (photo: PhotoWithTags) => void;
 }
 
-const ADDABLE_TYPES: { value: TagType; label: string }[] = [
+// Every tag can be reclassified when editing, including into/out of
+// "category" and "event" — those just aren't offered for brand-new tags.
+const EDIT_TYPES: { value: TagType; label: string }[] = [
   { value: "person", label: "Person" },
   { value: "place", label: "Place" },
+  { value: "event", label: "Event" },
+  { value: "category", label: "Category" },
   { value: "keyword", label: "Keyword" },
 ];
 
@@ -56,8 +62,15 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
   const [addSuggestions, setAddSuggestions] = useState<string[]>([]);
   const [editingTagId, setEditingTagId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingType, setEditingType] = useState<TagType>("keyword");
   const [editSuggestions, setEditSuggestions] = useState<string[]>([]);
-  const [pendingEdit, setPendingEdit] = useState<{ tagId: number; name: string; oldName: string } | null>(null);
+  const [pendingEdit, setPendingEdit] = useState<{
+    tagId: number;
+    name: string;
+    oldName: string;
+    type: TagType;
+    oldType: TagType;
+  } | null>(null);
   const [editBusy, setEditBusy] = useState(false);
 
   const [imageMode, setImageMode] = useState<ImageFitMode>("fit");
@@ -125,12 +138,12 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
   const editingTag = editingTagId ? photo.tags.find((t) => t.id === editingTagId) ?? null : null;
 
   useEffect(() => {
-    if (!editingTag) {
+    if (!editingTag || editingType === "category") {
       setEditSuggestions([]);
       return;
     }
     let cancelled = false;
-    fetchTagSuggestions(editingTag.type, editingName).then((s) => {
+    fetchTagSuggestions(editingType, editingName).then((s) => {
       if (!cancelled) {
         setEditSuggestions(
           s.filter((name) => name.toLowerCase() !== editingName.trim().toLowerCase() && name !== editingTag.name)
@@ -140,7 +153,7 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
     return () => {
       cancelled = true;
     };
-  }, [editingTag, editingName]);
+  }, [editingTag, editingType, editingName]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -195,12 +208,14 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
   function startEditTag(tag: Tag) {
     setEditingTagId(tag.id);
     setEditingName(tag.name);
+    setEditingType(tag.type);
     setPendingEdit(null);
   }
 
   function cancelEditTag() {
     setEditingTagId(null);
     setEditingName("");
+    setEditingType("keyword");
     setEditSuggestions([]);
     setPendingEdit(null);
   }
@@ -208,11 +223,17 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
   function saveEditTag() {
     if (!editingTag) return;
     const trimmed = editingName.trim();
-    if (!trimmed || trimmed === editingTag.name) {
+    if (!trimmed || (trimmed === editingTag.name && editingType === editingTag.type)) {
       cancelEditTag();
       return;
     }
-    setPendingEdit({ tagId: editingTag.id, name: trimmed, oldName: editingTag.name });
+    setPendingEdit({
+      tagId: editingTag.id,
+      name: trimmed,
+      oldName: editingTag.name,
+      type: editingType,
+      oldType: editingTag.type,
+    });
   }
 
   async function confirmEditTag(scope: "this" | "all") {
@@ -223,7 +244,7 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
       const res = await fetch(`/api/photos/${photo.id}/tags/${pendingEdit.tagId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: pendingEdit.name, scope }),
+        body: JSON.stringify({ name: pendingEdit.name, type: pendingEdit.type, scope }),
       });
       if (!res.ok) throw new Error("Could not update tag");
       const { tags } = await res.json();
@@ -411,16 +432,48 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
               editingTagId === tag.id ? (
                 <div key={tag.id} className="relative w-full">
                   <div className="flex gap-2">
-                    <input
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") saveEditTag();
-                        if (e.key === "Escape") cancelEditTag();
+                    <select
+                      value={editingType}
+                      onChange={(e) => {
+                        const nextType = e.target.value as TagType;
+                        setEditingType(nextType);
+                        if (nextType === "category" && !(CATEGORIES as readonly string[]).includes(editingName)) {
+                          setEditingName(CATEGORIES[0]);
+                        }
                       }}
-                      autoFocus
-                      className="flex-1 rounded-lg border border-accent bg-surface px-3 py-1.5 text-sm text-text"
-                    />
+                      className="rounded-lg border border-border bg-surface px-2 text-xs text-text"
+                    >
+                      {EDIT_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                    {editingType === "category" ? (
+                      <select
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        autoFocus
+                        className="flex-1 rounded-lg border border-accent bg-surface px-3 py-1.5 text-sm text-text"
+                      >
+                        {CATEGORIES.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveEditTag();
+                          if (e.key === "Escape") cancelEditTag();
+                        }}
+                        autoFocus
+                        className="flex-1 rounded-lg border border-accent bg-surface px-3 py-1.5 text-sm text-text"
+                      />
+                    )}
                     <button
                       onClick={saveEditTag}
                       disabled={editBusy || !editingName.trim()}
@@ -478,8 +531,12 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
           {pendingEdit && (
             <div className="flex flex-col gap-2 rounded-xl border border-accent/40 bg-accent/10 px-3 py-3 text-sm text-text">
               <p>
-                Rename &ldquo;{pendingEdit.oldName}&rdquo; to &ldquo;{pendingEdit.name}&rdquo; — just for this photo,
-                or everywhere it&apos;s used?
+                {pendingEdit.type !== pendingEdit.oldType
+                  ? `Change "${pendingEdit.oldName}" to "${pendingEdit.name}" (${
+                      EDIT_TYPES.find((t) => t.value === pendingEdit.type)?.label
+                    })`
+                  : `Rename "${pendingEdit.oldName}" to "${pendingEdit.name}"`}{" "}
+                — just for this photo, or everywhere it&apos;s used?
               </p>
               <div className="flex gap-2">
                 <button
@@ -514,7 +571,7 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
                 onChange={(e) => setNewTagType(e.target.value as TagType)}
                 className="rounded-lg border border-border bg-surface px-2 text-xs text-text"
               >
-                {ADDABLE_TYPES.map((t) => (
+                {ADDABLE_TAG_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>
                     {t.label}
                   </option>

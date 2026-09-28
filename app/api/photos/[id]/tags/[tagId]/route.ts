@@ -16,9 +16,12 @@ export async function DELETE(
   return NextResponse.json({ tags });
 }
 
+const TAG_TYPES = ["person", "category", "place", "event", "keyword"] as const;
+
 const patchSchema = z.object({
   name: z.string().min(1),
   scope: z.enum(["this", "all"]),
+  type: z.enum(TAG_TYPES).optional(),
 });
 
 export async function PATCH(
@@ -41,7 +44,7 @@ export async function PATCH(
   }
 
   try {
-    const tags = editPhotoTag(id, tagIdNum, parsed.data.name, parsed.data.scope);
+    const tags = editPhotoTag(id, tagIdNum, parsed.data.name, parsed.data.scope, undefined, parsed.data.type);
     return NextResponse.json({ tags });
   } catch (err) {
     return NextResponse.json(

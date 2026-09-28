@@ -84,7 +84,7 @@ Reply with JSON only, no other text, matching this exact shape:
   "description": "2 to 3 warm, specific sentences describing the photo. Use people's names if given.",
   "category": "exactly one of: ${CATEGORIES.join(", ")}",
   "keywords": ["3 to 6 short keyword tags"],
-  "event_name": "a better, more specific name for this event if the facts above support one, otherwise null"
+  "event_name": "the 'what' of this photo based only on what you can see happening in the image, otherwise null. This is NOT a place or a date. It should be one of: an event name/type (e.g. Family Dinner, Date Night, Concert), an activity type (e.g. Hike, Eating), a sport (e.g. Pickleball, Hockey), or an action (e.g. Drinking, Shopping)."
 }`;
 }
 

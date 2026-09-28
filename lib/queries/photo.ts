@@ -117,6 +117,28 @@ export function addPhotoTag(
   return getTagsForPhoto(photoId, userId);
 }
 
+/** Adds the same tag to many photos at once (e.g. tagging a whole grid selection). */
+export function addTagToPhotos(
+  photoIds: string[],
+  name: string,
+  type: TagType,
+  userId = DEFAULT_USER_ID
+): number {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error("Tag name cannot be empty");
+  }
+  const tagId = getOrCreateTag(trimmed, type, userId);
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO photo_tags (photo_id, tag_id, user_id, source) VALUES (?, ?, ?, 'user')`
+  );
+  const insertMany = db.transaction((ids: string[]) => {
+    for (const photoId of ids) insert.run(photoId, tagId, userId);
+  });
+  insertMany(photoIds);
+  return photoIds.length;
+}
+
 export function removePhotoTag(photoId: string, tagId: number, userId = DEFAULT_USER_ID): Tag[] {
   db.prepare(`DELETE FROM photo_tags WHERE photo_id = ? AND tag_id = ? AND user_id = ?`).run(
     photoId,
@@ -127,19 +149,21 @@ export function removePhotoTag(photoId: string, tagId: number, userId = DEFAULT_
 }
 
 /**
- * Renames a tag. "all" renames the shared tag row, so every photo that
- * carries it sees the new name (merging into an existing tag of that name
- * if one already exists, rather than violating the unique constraint).
- * "this" instead detaches just this photo from the old tag and attaches it
- * to a find-or-created tag with the new name, leaving every other photo's
- * tag untouched.
+ * Renames a tag and/or moves it to a different type (e.g. a keyword that
+ * should really be an event). "all" edits the shared tag row, so every
+ * photo that carries it sees the change (merging into an existing tag with
+ * the same name + type if one already exists, rather than violating the
+ * unique constraint). "this" instead detaches just this photo from the old
+ * tag and attaches it to a find-or-created tag with the new name/type,
+ * leaving every other photo's tag untouched.
  */
 export function editPhotoTag(
   photoId: string,
   tagId: number,
   newName: string,
   scope: "this" | "all",
-  userId = DEFAULT_USER_ID
+  userId = DEFAULT_USER_ID,
+  newType?: TagType
 ): Tag[] {
   const trimmed = newName.trim();
   if (!trimmed) {
@@ -153,11 +177,13 @@ export function editPhotoTag(
     throw new Error("Tag not found");
   }
 
+  const targetType = newType ?? tag.type;
+
   if (scope === "all") {
-    if (tag.name !== trimmed) {
+    if (tag.name !== trimmed || tag.type !== targetType) {
       const existing = db
         .prepare(`SELECT id FROM tags WHERE user_id = ? AND type = ? AND name = ? AND id != ?`)
-        .get(userId, tag.type, trimmed, tag.id) as { id: number } | undefined;
+        .get(userId, targetType, trimmed, tag.id) as { id: number } | undefined;
 
       if (existing) {
         db.prepare(`UPDATE OR IGNORE photo_tags SET tag_id = ? WHERE tag_id = ? AND user_id = ?`).run(
@@ -168,11 +194,16 @@ export function editPhotoTag(
         db.prepare(`DELETE FROM photo_tags WHERE tag_id = ? AND user_id = ?`).run(tag.id, userId);
         db.prepare(`DELETE FROM tags WHERE id = ? AND user_id = ?`).run(tag.id, userId);
       } else {
-        db.prepare(`UPDATE tags SET name = ? WHERE id = ? AND user_id = ?`).run(trimmed, tag.id, userId);
+        db.prepare(`UPDATE tags SET name = ?, type = ? WHERE id = ? AND user_id = ?`).run(
+          trimmed,
+          targetType,
+          tag.id,
+          userId
+        );
       }
     }
   } else {
-    const newTagId = getOrCreateTag(trimmed, tag.type, userId);
+    const newTagId = getOrCreateTag(trimmed, targetType, userId);
     if (newTagId !== tag.id) {
       db.prepare(`DELETE FROM photo_tags WHERE photo_id = ? AND tag_id = ? AND user_id = ?`).run(
         photoId,

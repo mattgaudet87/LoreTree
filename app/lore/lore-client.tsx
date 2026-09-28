@@ -7,6 +7,7 @@ import NodeGraph from "@/components/NodeGraph";
 import { parsePath, type PathSegment } from "@/lib/queries/filters";
 import type { NetworkNode, CenterNode } from "@/lib/queries/network";
 import type { NetworkNodeType, PhotoWithTags, TagType } from "@/lib/types";
+import { ADDABLE_TAG_TYPES } from "@/lib/tag-types";
 import { photoImageUrl } from "@/lib/image-url";
 import type { YearTagSummary, MonthTagSummary, TimelineStartType } from "@/lib/queries/timeline";
 import type { SearchResult } from "@/lib/queries/search";
@@ -88,6 +89,18 @@ function segmentsToPath(segments: PathSegment[]): string {
   return segments.map(segmentToString).join(",");
 }
 
+async function fetchTagSuggestions(type: TagType, query: string): Promise<string[]> {
+  if (!query.trim()) return [];
+  try {
+    const res = await fetch(`/api/tags/suggest?type=${type}&q=${encodeURIComponent(query)}`);
+    if (!res.ok) return [];
+    const { suggestions } = (await res.json()) as { suggestions: string[] };
+    return suggestions;
+  } catch {
+    return [];
+  }
+}
+
 interface NetworkData {
   total: number;
   center: CenterNode | null;
@@ -163,6 +176,13 @@ export default function LoreClient() {
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
   const [grid, setGrid] = useState<GridState | null>(null);
   const [gridLoading, setGridLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkTagType, setBulkTagType] = useState<TagType>("person");
+  const [bulkTagName, setBulkTagName] = useState("");
+  const [bulkSuggestions, setBulkSuggestions] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkDone, setBulkDone] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -321,6 +341,10 @@ export default function LoreClient() {
       const res = await fetch(`/api/feed?${params.toString()}`);
       if (!res.ok) throw new Error("Could not load photos");
       const { photos: loaded } = (await res.json()) as { photos: PhotoWithTags[] };
+      setSelectedIds(new Set());
+      setBulkTagName("");
+      setBulkError(null);
+      setBulkDone(null);
       setGrid({
         photos: loaded,
         backHref: `/lore?${searchParams.toString()}`,
@@ -330,6 +354,55 @@ export default function LoreClient() {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setGridLoading(false);
+    }
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (!grid) return;
+    setSelectedIds((prev) =>
+      prev.size === grid.photos.length ? new Set() : new Set(grid.photos.map((p) => p.id))
+    );
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchTagSuggestions(bulkTagType, bulkTagName).then((s) => {
+      if (!cancelled) setBulkSuggestions(s.filter((name) => name.toLowerCase() !== bulkTagName.trim().toLowerCase()));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bulkTagType, bulkTagName]);
+
+  async function addBulkTag(overrideName?: string) {
+    const name = (overrideName ?? bulkTagName).trim();
+    if (!name || selectedIds.size === 0) return;
+    setBulkBusy(true);
+    setBulkError(null);
+    setBulkDone(null);
+    try {
+      const res = await fetch(`/api/tags/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoIds: Array.from(selectedIds), name, type: bulkTagType }),
+      });
+      if (!res.ok) throw new Error("Could not add tag");
+      setBulkDone(`Added "${name}" to ${selectedIds.size} photo${selectedIds.size === 1 ? "" : "s"}.`);
+      setBulkTagName("");
+      setBulkSuggestions([]);
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -736,24 +809,107 @@ export default function LoreClient() {
             >
               ×
             </button>
+            <button
+              onClick={toggleSelectAll}
+              className="rounded-full border border-border px-2.5 py-1 text-xs font-medium text-text-muted transition-colors hover:text-text"
+            >
+              {selectedIds.size === grid.photos.length ? "Deselect all" : "Select all"}
+            </button>
             <p className="text-sm font-medium text-text">
-              {grid.photos.length} photo{grid.photos.length === 1 ? "" : "s"}
+              {selectedIds.size > 0
+                ? `${selectedIds.size} selected`
+                : `${grid.photos.length} photo${grid.photos.length === 1 ? "" : "s"}`}
             </p>
           </div>
           <div className="grid flex-1 auto-rows-min grid-cols-3 gap-2 overflow-y-auto px-4 pb-4 sm:grid-cols-4 md:grid-cols-6">
-            {grid.photos.map((p) => (
-              <a
-                key={p.id}
-                href={`/feed?ids=${encodeURIComponent(grid.photos.map((gp) => gp.id).join(","))}&start=${p.id}&back=${encodeURIComponent(grid.backHref)}`}
-                className="relative block aspect-square overflow-hidden rounded-lg border border-border bg-surface-2"
-              >
-                {p.thumb_path && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={photoImageUrl(p, "thumb")} alt="" className="h-full w-full object-cover" />
-                )}
-              </a>
-            ))}
+            {grid.photos.map((p) => {
+              const selected = selectedIds.has(p.id);
+              return (
+                <a
+                  key={p.id}
+                  href={`/feed?ids=${encodeURIComponent(grid.photos.map((gp) => gp.id).join(","))}&start=${p.id}&back=${encodeURIComponent(grid.backHref)}`}
+                  className="relative block aspect-square overflow-hidden rounded-lg border border-border bg-surface-2"
+                >
+                  {p.thumb_path && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={photoImageUrl(p, "thumb")} alt="" className="h-full w-full object-cover" />
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleSelected(p.id);
+                    }}
+                    aria-label={selected ? "Deselect photo" : "Select photo"}
+                    aria-pressed={selected}
+                    className={`absolute left-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-md border-2 backdrop-blur ${
+                      selected ? "border-accent bg-accent text-bg" : "border-white/70 bg-black/30 text-transparent"
+                    }`}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </button>
+                </a>
+              );
+            })}
           </div>
+
+          {selectedIds.size > 0 && (
+            <div
+              className="flex flex-col gap-2 border-t border-border bg-surface px-4 py-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {bulkError && <p className="text-xs text-node-events">{bulkError}</p>}
+              {bulkDone && <p className="text-xs text-accent">{bulkDone}</p>}
+              <div className="relative flex gap-2">
+                <select
+                  value={bulkTagType}
+                  onChange={(e) => setBulkTagType(e.target.value as TagType)}
+                  className="rounded-lg border border-border bg-surface-2 px-2 text-xs text-text"
+                >
+                  {ADDABLE_TAG_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={bulkTagName}
+                  onChange={(e) => setBulkTagName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addBulkTag()}
+                  placeholder={`Add a tag to ${selectedIds.size} photo${selectedIds.size === 1 ? "" : "s"}`}
+                  className="flex-1 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm text-text placeholder:text-text-muted"
+                />
+                <button
+                  onClick={() => addBulkTag()}
+                  disabled={bulkBusy || !bulkTagName.trim()}
+                  className="rounded-lg bg-accent px-3 text-sm font-medium text-bg disabled:opacity-40"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="rounded-lg border border-border px-3 text-sm text-text-muted"
+                >
+                  Clear
+                </button>
+              </div>
+              {bulkSuggestions.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-surface-2 p-2">
+                  {bulkSuggestions.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => addBulkTag(s)}
+                      className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-text hover:border-accent"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
