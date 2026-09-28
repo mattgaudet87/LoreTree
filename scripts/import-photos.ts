@@ -1,9 +1,10 @@
-// Apple Photos importer. Reads the "LoreTree Beta" album via osxphotos,
-// exports full-size JPEGs, resizes them with sharp, and upserts everything
-// into the database. Safe to re-run: photos are upserted by their Apple
-// Photos uuid, and tags are linked with INSERT OR IGNORE so nothing
-// duplicates. Must be run from Terminal (`npm run import`) — macOS only
-// grants Photos library access to the app actually running the process.
+// Apple Photos importer. Reads either one album or the whole library (see
+// lib/import-settings.ts, configured from the Add Photos page) via
+// osxphotos, exports full-size JPEGs, resizes them with sharp, and upserts
+// everything into the database. Safe to re-run: photos are upserted by
+// their Apple Photos uuid, and tags are linked with INSERT OR IGNORE so
+// nothing duplicates. Must be run from Terminal (`npm run import`) — macOS
+// only grants Photos library access to the app actually running the process.
 import { execFileSync, spawnSync } from "child_process";
 import fs from "fs";
 import os from "os";
@@ -12,9 +13,13 @@ import sharp from "sharp";
 import { db, DEFAULT_USER_ID } from "../lib/db";
 import { categoryForAppleLabel } from "../lib/categories";
 import { formatEventDateLabel, weekStartOf } from "../lib/queries/date-utils";
+import { readImportSettings } from "../lib/import-settings";
 import type { TagType } from "../lib/types";
 
-const ALBUM = "LoreTree Beta";
+const SETTINGS = readImportSettings();
+// null means "whole library" — no --album filter passed to osxphotos.
+const ALBUM = SETTINGS.mode === "album" ? SETTINGS.album : null;
+const SOURCE_LABEL = ALBUM ? `"${ALBUM}" album` : "whole Photos library";
 const DATA_DIR = path.join(process.cwd(), "data");
 const TMP_DIR = path.join(DATA_DIR, "tmp");
 const DISPLAY_DIR = path.join(DATA_DIR, "images", "display");
@@ -111,10 +116,11 @@ const upsertPhoto = db.prepare(`
 async function main() {
   const osxphotos = resolveOsxphotos();
 
-  console.log(`Reading "${ALBUM}" album from Apple Photos...`);
+  console.log(`Reading your ${SOURCE_LABEL} from Apple Photos...`);
   let records: OsxphotosRecord[];
   try {
-    const output = execFileSync(osxphotos, ["query", "--album", ALBUM, "--json"], {
+    const queryArgs = ["query", ...(ALBUM ? ["--album", ALBUM] : []), "--json"];
+    const output = execFileSync(osxphotos, queryArgs, {
       encoding: "utf-8",
       maxBuffer: 1024 * 1024 * 64,
     });
@@ -139,11 +145,13 @@ async function main() {
 
   if (records.length === 0) {
     console.log(
-      `No photos found in the "${ALBUM}" album. Open Photos, add some photos to an album named exactly "${ALBUM}", and run this again.`
+      ALBUM
+        ? `No photos found in the "${ALBUM}" album. Open Photos, add some photos to an album named exactly "${ALBUM}", and run this again.`
+        : "No photos found in your Photos library."
     );
     return;
   }
-  console.log(`Found ${records.length} photo(s) in "${ALBUM}".`);
+  console.log(`Found ${records.length} photo(s) in your ${SOURCE_LABEL}.`);
 
   const existingIds = new Set(
     (db.prepare(`SELECT id FROM photos WHERE user_id = ?`).all(DEFAULT_USER_ID) as { id: string }[]).map(
@@ -162,8 +170,7 @@ async function main() {
     [
       "export",
       TMP_DIR,
-      "--album",
-      ALBUM,
+      ...(ALBUM ? ["--album", ALBUM] : []),
       "--filename",
       "{uuid}",
       "--convert-to-jpeg",
@@ -279,7 +286,7 @@ async function main() {
 
   console.log("");
   console.log("Import complete:");
-  console.log(`  ${records.length} photos in "${ALBUM}" (${newCount} new, ${updatedCount} updated, ${skippedCount} skipped)`);
+  console.log(`  ${records.length} photos in your ${SOURCE_LABEL} (${newCount} new, ${updatedCount} updated, ${skippedCount} skipped)`);
   console.log(`  ${peopleFound.size} people found`);
   console.log(`  ${placesFound.size} places found`);
   console.log(`  ${eventsCreated} new events created`);

@@ -73,6 +73,23 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
     saveImageMode(mode);
   }
 
+  // Photo can change while the panel stays open (scrolling/swiping through
+  // photos without closing the detail view) — clear out any in-progress
+  // editing state from the previous photo so it doesn't linger onto this one.
+  useEffect(() => {
+    setNewTagName("");
+    setBusy(false);
+    setError(null);
+    setShareState("idle");
+    setContextOpen(false);
+    setContextText("");
+    setContextBusy(false);
+    setContextError(null);
+    setEditingTagId(null);
+    setEditingName("");
+    setPendingEdit(null);
+  }, [photo.id]);
+
   useEffect(() => {
     let cancelled = false;
     setAiDescriptionOpen(false);
@@ -356,6 +373,9 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
       <div
         className="absolute inset-x-0 bottom-0 flex max-h-[70vh] w-full flex-col gap-4 overflow-y-auto bg-gradient-to-t from-black/85 via-black/55 to-transparent px-5 pb-6 pt-20 backdrop-blur-md md:inset-x-auto md:inset-y-auto md:bottom-auto md:left-auto md:right-6 md:top-1/2 md:h-auto md:w-96 md:max-h-[80vh] md:-translate-y-1/2 md:rounded-2xl md:border md:border-white/10 md:bg-none md:bg-black/70 md:px-6 md:py-6 md:pt-6 md:shadow-2xl"
         onClick={(e) => e.stopPropagation()}
+        onWheel={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
       >
         <div>
           <p className="text-xs text-text-muted">{formatDate(photo.taken_at)}</p>

@@ -117,13 +117,15 @@ export default function FeedClient() {
   }, []);
 
   useEffect(() => {
+    // Navigation stays live while the detail view is open — DetailPanel
+    // stops propagation on its own scrollable text card, so scrolling the
+    // caption/tags doesn't also flip photos; scrolling the image itself
+    // still does.
     function onWheel(e: WheelEvent) {
-      if (detailOpen) return;
       if (Math.abs(e.deltaY) < 12) return;
       withCooldown(() => (e.deltaY > 0 ? goNext() : goPrev()));
     }
     function onKey(e: KeyboardEvent) {
-      if (detailOpen) return;
       const target = e.target as HTMLElement;
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
       if (e.key === "ArrowDown") withCooldown(goNext);
@@ -135,7 +137,7 @@ export default function FeedClient() {
       window.removeEventListener("wheel", onWheel);
       window.removeEventListener("keydown", onKey);
     };
-  }, [detailOpen, goNext, goPrev, withCooldown]);
+  }, [goNext, goPrev, withCooldown]);
 
   function onTouchStart(e: ReactTouchEvent<HTMLDivElement>) {
     touchStartY.current = e.touches[0].clientY;

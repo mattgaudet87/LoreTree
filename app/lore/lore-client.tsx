@@ -98,6 +98,22 @@ interface NetworkData {
 interface GridState {
   photos: PhotoWithTags[];
   backHref: string;
+  onClose: () => void;
+}
+
+function BackButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Back"
+      className="mb-2 flex h-8 w-8 shrink-0 items-center justify-center self-start rounded-full border border-border bg-surface-2 text-text-muted transition-colors hover:text-text"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+        <path d="M15 18l-6-6 6-6" />
+      </svg>
+    </button>
+  );
 }
 
 function ShowToggle({
@@ -187,6 +203,7 @@ export default function LoreClient() {
     if (view !== "map") return;
     let cancelled = false;
     setError(null);
+    setData(null);
 
     const params = new URLSearchParams();
     if (path) params.set("path", path);
@@ -198,7 +215,18 @@ export default function LoreClient() {
         return res.json();
       })
       .then((result: NetworkData) => {
-        if (!cancelled) setData(result);
+        if (cancelled) return;
+        setData(result);
+        // The map only earns a "Show" breakdown when it actually helps sort
+        // the photos (see isHelpful in lib/queries/network.ts). When none of
+        // the remaining facets are helpful, nodes comes back empty and the
+        // graph would otherwise render as just a lone center circle — go
+        // straight to the grid instead. Checked here, off the fetch result
+        // itself (not a separate effect keyed on `data`), so it can never
+        // act on a stale result from the previous path.
+        if (result.nodes.length === 0 && result.total > 0) {
+          openGrid({ path }, mapBack);
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Something went wrong");
@@ -282,7 +310,7 @@ export default function LoreClient() {
     return items;
   }, [segments]);
 
-  async function openGrid(opts: { path?: string; year?: number; month?: number }) {
+  async function openGrid(opts: { path?: string; year?: number; month?: number }, onClose?: () => void) {
     setGridLoading(true);
     const params = new URLSearchParams({ limit: "200" });
     if (opts.path) params.set("path", opts.path);
@@ -293,12 +321,32 @@ export default function LoreClient() {
       const res = await fetch(`/api/feed?${params.toString()}`);
       if (!res.ok) throw new Error("Could not load photos");
       const { photos: loaded } = (await res.json()) as { photos: PhotoWithTags[] };
-      setGrid({ photos: loaded, backHref: `/lore?${searchParams.toString()}` });
+      setGrid({
+        photos: loaded,
+        backHref: `/lore?${searchParams.toString()}`,
+        onClose: onClose ?? (() => setGrid(null)),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setGridLoading(false);
     }
+  }
+
+  // One level up in the current path/period — used by the top-left back
+  // button, and to back a dead-end map drill (see the effect below) out to
+  // the level that had real choices instead of reopening the same dead end.
+  function mapBack() {
+    if (segments.length === 0) return;
+    setGrid(null);
+    const parent = segments.length > 1 ? segmentsToPath(segments.slice(0, -1)) : null;
+    setParams({ path: parent, show: null });
+  }
+
+  function timelineBack() {
+    if (!yearParam) return;
+    setGrid(null);
+    setParams({ year: null });
   }
 
   function clearFilters() {
@@ -529,8 +577,9 @@ export default function LoreClient() {
       )}
 
       {!trimmedQuery && view === "map" && (
-        <div className="relative flex flex-1 items-center justify-center px-6 py-4">
-          {error && <p className="text-sm text-text-muted">{error}</p>}
+        <div className="relative flex flex-1 flex-col px-6 py-4">
+          {segments.length > 0 && <BackButton onClick={mapBack} />}
+          {error && <p className="flex-1 text-sm text-text-muted">{error}</p>}
 
           {!error && data && (
             <AnimatePresence mode="wait">
@@ -540,7 +589,7 @@ export default function LoreClient() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 1.15 }}
                 transition={{ duration: 0.3 }}
-                className="w-full"
+                className="flex w-full flex-1 items-center justify-center"
               >
                 <NodeGraph
                   centerLabel={centerLabel}
@@ -557,7 +606,8 @@ export default function LoreClient() {
       )}
 
       {!trimmedQuery && view === "timeline" && (
-        <div className="mx-auto w-full max-w-2xl flex-1 px-4 pb-4 pt-2">
+        <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 pb-4 pt-2">
+          {yearParam && <BackButton onClick={timelineBack} />}
           {error && <p className="px-2 py-12 text-center text-sm text-text-muted">{error}</p>}
 
           {!error && !yearParam && timelineYears && timelineYears.length === 0 && (
@@ -680,7 +730,7 @@ export default function LoreClient() {
         <div className="fixed inset-0 z-30 flex flex-col bg-bg md:left-20">
           <div className="flex items-center gap-3 px-4 py-4">
             <button
-              onClick={() => setGrid(null)}
+              onClick={() => grid.onClose()}
               aria-label="Close"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface-2 text-text-muted hover:text-text"
             >
