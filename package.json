@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "import": "tsx scripts/import-photos.ts",
-    "seed": "tsx scripts/seed-sample.ts"
+    "seed": "tsx scripts/seed-sample.ts",
+    "seed:clear": "tsx scripts/seed-sample.ts --clear"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
