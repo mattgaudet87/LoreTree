@@ -40,6 +40,19 @@ interface OsxphotosRecord {
   longitude?: number | null;
   place?: OsxphotosPlace | null;
   score?: { overall?: number } | null;
+  title?: string | null;
+  description?: string | null;
+}
+
+// Apple's own caption text for a photo, typed by hand in the Photos app.
+// This is NOT AI-generated — it's metadata Apple already had. We only use it
+// as a starting description; it's never overwritten once analysis runs.
+function extractAppleDescription(record: OsxphotosRecord): string | null {
+  const description = record.description?.trim();
+  if (description) return description;
+  const title = record.title?.trim();
+  if (title) return title;
+  return null;
 }
 
 function resolveOsxphotos(): string {
@@ -88,10 +101,10 @@ function linkTag(photoId: string, tagId: number) {
 const upsertPhoto = db.prepare(`
   INSERT INTO photos (
     id, user_id, taken_at, year, month, week_start, place_name, latitude, longitude,
-    is_favorite, apple_score, display_path, thumb_path, width, height, imported_at, images_updated_at
+    is_favorite, apple_score, display_path, thumb_path, width, height, description, imported_at, images_updated_at
   ) VALUES (
     @id, @user_id, @taken_at, @year, @month, @week_start, @place_name, @latitude, @longitude,
-    @is_favorite, @apple_score, @display_path, @thumb_path, @width, @height, datetime('now'), datetime('now')
+    @is_favorite, @apple_score, @display_path, @thumb_path, @width, @height, @description, datetime('now'), datetime('now')
   )
   ON CONFLICT(id) DO UPDATE SET
     taken_at = excluded.taken_at,
@@ -109,9 +122,10 @@ const upsertPhoto = db.prepare(`
     height = excluded.height,
     images_updated_at = datetime('now')
 `);
-// Note: description, ai_status, ai_error, analyzed_at, and is_profile are
-// intentionally left untouched on conflict — re-importing metadata should
-// never wipe out AI analysis or a user's profile pick.
+// Note: description is only set on first insert (from Apple's own caption,
+// if any) and is otherwise left untouched on conflict, same as ai_status,
+// ai_error, analyzed_at, and is_profile — re-importing metadata should never
+// wipe out AI analysis, a user's profile pick, or a description AI already wrote.
 
 async function main() {
   const osxphotos = resolveOsxphotos();
@@ -248,6 +262,7 @@ async function main() {
       thumb_path: `data/images/thumb/${record.uuid}.jpg`,
       width: displayMeta.width ?? null,
       height: displayMeta.height ?? null,
+      description: extractAppleDescription(record),
     });
 
     if (existingIds.has(record.uuid)) updatedCount++;
