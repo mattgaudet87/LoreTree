@@ -17,7 +17,7 @@ const FACET_LABELS: Record<TagType, string> = {
   place: "Places",
   event: "Events",
   category: "Categories",
-  keyword: "Keywords",
+  keyword: "Details",
 };
 
 const SAVED_FILTERS_KEY = "loretree:saved-filters";
@@ -31,12 +31,12 @@ const VIEW_OPTIONS: { value: View; label: string }[] = [
 ];
 
 // The map drills through these four in cascading order; "category" isn't
-// part of the People/Location/Event/Date taxonomy the map is built around.
+// part of the People/Place/Event/Date taxonomy the map is built around.
 const MAP_TYPES: NetworkNodeType[] = ["person", "place", "event", "year"];
 
 const MAP_TYPE_LABEL: Record<NetworkNodeType, string> = {
   person: "People",
-  place: "Location",
+  place: "Place",
   event: "Event",
   year: "Date",
   category: "Categories",
@@ -60,7 +60,7 @@ const MAP_TYPE_COLOR: Record<NetworkNodeType, string> = {
 
 const TIMELINE_START_OPTIONS: { value: StartType; label: string; dot: string }[] = [
   { value: "person", label: "People", dot: "bg-node-people" },
-  { value: "place", label: "Location", dot: "bg-node-places" },
+  { value: "place", label: "Place", dot: "bg-node-places" },
   { value: "event", label: "Event", dot: "bg-node-events" },
 ];
 

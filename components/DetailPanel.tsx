@@ -6,7 +6,6 @@ import { photoImageUrl } from "@/lib/image-url";
 import MicButton from "@/components/MicButton";
 import { longCaption } from "@/lib/caption";
 import { loadImageMode, saveImageMode, type ImageFitMode } from "@/lib/image-mode";
-import { CATEGORIES } from "@/lib/categories";
 import { ADDABLE_TAG_TYPES } from "@/lib/tag-types";
 
 interface DetailPanelProps {
@@ -14,16 +13,6 @@ interface DetailPanelProps {
   onClose: () => void;
   onPhotoChange: (photo: PhotoWithTags) => void;
 }
-
-// Every tag can be reclassified when editing, including into/out of
-// "category" and "event" — those just aren't offered for brand-new tags.
-const EDIT_TYPES: { value: TagType; label: string }[] = [
-  { value: "person", label: "Person" },
-  { value: "place", label: "Place" },
-  { value: "event", label: "Event" },
-  { value: "category", label: "Category" },
-  { value: "keyword", label: "Keyword" },
-];
 
 function formatDate(iso: string | null): string {
   if (!iso) return "";
@@ -138,7 +127,7 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
   const editingTag = editingTagId ? photo.tags.find((t) => t.id === editingTagId) ?? null : null;
 
   useEffect(() => {
-    if (!editingTag || editingType === "category") {
+    if (!editingTag) {
       setEditSuggestions([]);
       return;
     }
@@ -206,6 +195,7 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
   }
 
   function startEditTag(tag: Tag) {
+    if (tag.type === "category") return;
     setEditingTagId(tag.id);
     setEditingName(tag.name);
     setEditingType(tag.type);
@@ -434,46 +424,25 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
                   <div className="flex gap-2">
                     <select
                       value={editingType}
-                      onChange={(e) => {
-                        const nextType = e.target.value as TagType;
-                        setEditingType(nextType);
-                        if (nextType === "category" && !(CATEGORIES as readonly string[]).includes(editingName)) {
-                          setEditingName(CATEGORIES[0]);
-                        }
-                      }}
+                      onChange={(e) => setEditingType(e.target.value as TagType)}
                       className="rounded-lg border border-border bg-surface px-2 text-xs text-text"
                     >
-                      {EDIT_TYPES.map((t) => (
+                      {ADDABLE_TAG_TYPES.map((t) => (
                         <option key={t.value} value={t.value}>
                           {t.label}
                         </option>
                       ))}
                     </select>
-                    {editingType === "category" ? (
-                      <select
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        autoFocus
-                        className="flex-1 rounded-lg border border-accent bg-surface px-3 py-1.5 text-sm text-text"
-                      >
-                        {CATEGORIES.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") saveEditTag();
-                          if (e.key === "Escape") cancelEditTag();
-                        }}
-                        autoFocus
-                        className="flex-1 rounded-lg border border-accent bg-surface px-3 py-1.5 text-sm text-text"
-                      />
-                    )}
+                    <input
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveEditTag();
+                        if (e.key === "Escape") cancelEditTag();
+                      }}
+                      autoFocus
+                      className="flex-1 rounded-lg border border-accent bg-surface px-3 py-1.5 text-sm text-text"
+                    />
                     <button
                       onClick={saveEditTag}
                       disabled={editBusy || !editingName.trim()}
@@ -511,7 +480,9 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
                       : "border-border bg-surface-2"
                   }`}
                 >
-                  <button onClick={() => startEditTag(tag)}>{tag.name}</button>
+                  <button onClick={() => startEditTag(tag)} disabled={tag.type === "category"}>
+                    {tag.name}
+                  </button>
                   {newTagKeys.has(`${tag.type}:${tag.name}`) && (
                     <span className="text-[10px] uppercase text-accent">new</span>
                   )}
@@ -533,7 +504,7 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
               <p>
                 {pendingEdit.type !== pendingEdit.oldType
                   ? `Change "${pendingEdit.oldName}" to "${pendingEdit.name}" (${
-                      EDIT_TYPES.find((t) => t.value === pendingEdit.type)?.label
+                      ADDABLE_TAG_TYPES.find((t) => t.value === pendingEdit.type)?.label
                     })`
                   : `Rename "${pendingEdit.oldName}" to "${pendingEdit.name}"`}{" "}
                 — just for this photo, or everywhere it&apos;s used?

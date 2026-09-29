@@ -21,6 +21,10 @@ const HAIKU_PRICE_PER_TOKEN = {
 
 const client = new Anthropic();
 
+// The app's owner, as Apple Photos names him in People tags. Descriptions
+// address him as "you" instead of naming him in the third person.
+const OWNER_NAME = "Matt Gaudet";
+
 const analysisResultSchema = z.object({
   description: z.string().min(1),
   category: z.string().min(1),
@@ -65,8 +69,12 @@ export interface PhotoContext {
 }
 
 function buildAnalysisPrompt(context: PhotoContext): string {
+  const includesOwner = context.people.includes(OWNER_NAME);
+  const otherPeople = context.people.filter((name) => name !== OWNER_NAME);
+
   const knownFacts = [
-    context.people.length > 0 ? `People Apple has identified: ${context.people.join(", ")}.` : null,
+    otherPeople.length > 0 ? `People Apple has identified: ${otherPeople.join(", ")}.` : null,
+    includesOwner ? `This photo also includes the app's owner, ${OWNER_NAME}, who you are writing this description for.` : null,
     context.place ? `Place: ${context.place}.` : null,
     context.takenAt ? `Taken: ${context.takenAt}.` : null,
     context.eventName ? `Apple's automatic event name: "${context.eventName}".` : null,
@@ -78,6 +86,8 @@ function buildAnalysisPrompt(context: PhotoContext): string {
   return `You are writing a warm, specific photo description for a personal memory app. Use only what you are told below and what you can see in the photo. Never invent names, places, or events that were not given to you.
 
 ${knownFacts || "No metadata is available for this photo besides the image itself."}
+
+${includesOwner ? `You are writing directly to ${OWNER_NAME}, the app's owner, so when he appears in the photo, address him as "you" instead of naming him in the third person (e.g. "You and Sarah at the gym" not "${OWNER_NAME} and Sarah at the gym"). Never refer to him by name.` : ""}
 
 Reply with JSON only, no other text, matching this exact shape:
 {
@@ -170,6 +180,8 @@ function buildContextPrompt(existingDescription: string, contextText: string): s
 Current description: "${existingDescription}"
 
 Context the owner added: "${contextText}"
+
+If the current description addresses the owner as "you" rather than naming him, keep doing that in the rewrite.
 
 Reply with JSON only, no other text, matching this exact shape:
 {
