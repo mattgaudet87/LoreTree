@@ -9,7 +9,7 @@ import { execFileSync, spawnSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import sharp from "sharp";
+import sharp, { type Metadata } from "sharp";
 import { db, DEFAULT_USER_ID } from "../lib/db";
 import { categoryForAppleLabel } from "../lib/categories";
 import { formatEventDateLabel, weekStartOf } from "../lib/queries/date-utils";
@@ -226,18 +226,27 @@ async function main() {
     // portrait photo taken with the phone turned sideways) before resizing.
     // Without it, sharp keeps the sensor's raw pixel orientation and strips
     // the EXIF tag that would have told browsers how to display it upright.
-    await sharp(exportedPath)
-      .rotate()
-      .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 85 })
-      .toFile(displayPath);
-    const displayMeta = await sharp(displayPath).metadata();
+    // One unreadable image (corrupt file, odd format) skips just that photo
+    // instead of stopping the whole import.
+    let displayMeta: Metadata;
+    try {
+      await sharp(exportedPath)
+        .rotate()
+        .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 85 })
+        .toFile(displayPath);
+      displayMeta = await sharp(displayPath).metadata();
 
-    await sharp(exportedPath)
-      .rotate()
-      .resize(400, 400, { fit: "inside", withoutEnlargement: true })
-      .jpeg({ quality: 80 })
-      .toFile(thumbPath);
+      await sharp(exportedPath)
+        .rotate()
+        .resize(400, 400, { fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 80 })
+        .toFile(thumbPath);
+    } catch (err) {
+      console.warn(`  Skipping ${record.uuid}: couldn't read its image (${err instanceof Error ? err.message : err}).`);
+      skippedCount++;
+      continue;
+    }
 
     const datePart = record.date.slice(0, 10);
     const [year, month] = datePart.split("-").map(Number);

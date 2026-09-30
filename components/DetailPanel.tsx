@@ -27,6 +27,9 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // Escape inside a text box (e.g. editing a tag) only cancels that edit.
+      const target = e.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
       if (e.key === "Escape") onClose();
     }
     window.addEventListener("keydown", onKey);

@@ -51,6 +51,7 @@ export default function LoreClient() {
 
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [data, setData] = useState<NetworkData | null>(null);
   const [timelineYears, setTimelineYears] = useState<YearTagSummary[] | null>(null);
   const [timelineMonths, setTimelineMonths] = useState<MonthTagSummary[] | null>(null);
@@ -173,6 +174,7 @@ export default function LoreClient() {
   useEffect(() => {
     if (!trimmedQuery) {
       setSearchResult(null);
+      setSearchFailed(false);
       return;
     }
     let cancelled = false;
@@ -193,10 +195,16 @@ export default function LoreClient() {
           return res.json();
         })
         .then((result: SearchResult) => {
-          if (!cancelled) setSearchResult(result);
+          if (!cancelled) {
+            setSearchResult(result);
+            setSearchFailed(false);
+          }
         })
         .catch(() => {
-          if (!cancelled) setSearchResult(null);
+          if (!cancelled) {
+            setSearchResult(null);
+            setSearchFailed(true);
+          }
         });
     }
 
@@ -328,7 +336,7 @@ export default function LoreClient() {
         onClearFilters={clearFilters}
       />
 
-      {trimmedQuery && <LoreSearchResults query={trimmedQuery} result={searchResult} backHref={searchBackHref} />}
+      {trimmedQuery && <LoreSearchResults query={trimmedQuery} result={searchResult} failed={searchFailed} backHref={searchBackHref} />}
 
       {!trimmedQuery && view === "map" && (
         <div className="relative flex flex-1 flex-col px-6 py-4">

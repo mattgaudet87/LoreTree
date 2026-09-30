@@ -31,6 +31,7 @@ interface BatchProgress {
 
 async function fetchStats(): Promise<Stats> {
   const res = await fetch("/api/stats");
+  if (!res.ok) throw new Error("Could not load your photo counts. Check that LoreTree is running, then refresh.");
   return res.json();
 }
 
@@ -44,12 +45,22 @@ export default function SettingsPage() {
   const [confirmAll, setConfirmAll] = useState(false);
   const [lastResult, setLastResult] = useState<AnalyzeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stopRef = useRef(false);
   const [batch, setBatch] = useState<BatchProgress | null>(null);
 
+  function refreshStats() {
+    fetchStats()
+      .then((next) => {
+        setStats(next);
+        setStatsError(null);
+      })
+      .catch((err) => setStatsError(err instanceof Error ? err.message : "Could not load your photo counts."));
+  }
+
   useEffect(() => {
-    fetchStats().then(setStats);
+    refreshStats();
     return () => {
       stopRef.current = true;
       if (pollRef.current) clearInterval(pollRef.current);
@@ -85,7 +96,7 @@ export default function SettingsPage() {
     );
 
     pollRef.current = setInterval(() => {
-      fetchStats().then(setStats);
+      refreshStats();
     }, 1000);
 
     const total: AnalyzeResult = { succeeded: 0, failed: 0, estimatedCost: 0 };
@@ -105,7 +116,7 @@ export default function SettingsPage() {
       pollRef.current = null;
       setBusy(null);
       setBatch(null);
-      fetchStats().then(setStats);
+      refreshStats();
     }
   }
 
@@ -192,6 +203,7 @@ export default function SettingsPage() {
         </p>
       )}
       {error && <p className="text-sm text-node-events">{error}</p>}
+      {statsError && <p className="text-sm text-node-events">{statsError}</p>}
 
       {stats && stats.errorReasons.length > 0 && (
         <div className="rounded-xl border border-border bg-surface px-4 py-3">
