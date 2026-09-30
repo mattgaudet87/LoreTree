@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import type { TouchEvent as ReactTouchEvent, MouseEvent as ReactMouseEvent } from "react";
 import type { PhotoWithTags } from "@/lib/types";
 import { photoImageUrl } from "@/lib/image-url";
-import { shortCaption } from "@/lib/caption";
+import { captionTagsFor, shortCaption } from "@/lib/caption";
 import { formatPhotoDate } from "@/lib/format";
 import type { ImageFitMode } from "@/lib/image-mode";
 
@@ -104,9 +104,7 @@ export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail }
     onOpenDetail();
   }
 
-  const eventName = photo.tags.find((t) => t.type === "event")?.name ?? null;
-  const peopleNames = photo.tags.filter((t) => t.type === "person").map((t) => t.name);
-  const caption = shortCaption({ eventName, placeName: photo.place_name, peopleNames });
+  const caption = shortCaption(captionTagsFor(photo.tags));
 
   return (
     <div

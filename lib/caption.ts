@@ -1,7 +1,22 @@
+import type { Tag } from "@/lib/types";
+
 export interface CaptionTags {
   eventName: string | null;
   placeName: string | null;
   peopleNames: string[];
+}
+
+/**
+ * Reads the caption pieces from a photo's tags. The place comes from the
+ * Place tag, not Apple's original place field, so a place Matt added,
+ * renamed, or removed shows up in the caption.
+ */
+export function captionTagsFor(tags: Tag[]): CaptionTags {
+  return {
+    eventName: tags.find((t) => t.type === "event")?.name ?? null,
+    placeName: tags.find((t) => t.type === "place")?.name ?? null,
+    peopleNames: tags.filter((t) => t.type === "person").map((t) => t.name),
+  };
 }
 
 function joinNames(names: string[]): string {

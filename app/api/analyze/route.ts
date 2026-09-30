@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { analyzePhoto, estimateCost, type AnalysisUsage } from "@/lib/ai";
 import { db, DEFAULT_USER_ID } from "@/lib/db";
-import { addPhotoTag, applyAiEvent, getTagsForPhoto } from "@/lib/queries/photo";
+import { addPhotoTag, applyAiEvent, getContextNotesForPhoto, getTagsForPhoto } from "@/lib/queries/photo";
 import type { PhotoRow } from "@/lib/types";
 
 const requestSchema = z.object({
@@ -80,12 +80,15 @@ async function runBatch(userId: string, photos: PhotoRow[]) {
 
       const { result, usage: photoUsage } = await analyzePhoto(photo, {
         people: tags.filter((t) => t.type === "person").map((t) => t.name),
-        place: photo.place_name,
+        // The Place tag, so a place Matt corrected wins over Apple's original.
+        place: tags.find((t) => t.type === "place")?.name ?? null,
         eventName: tags.find((t) => t.type === "event")?.name ?? null,
         appleLabels: tags.filter((t) => t.type === "keyword").map((t) => t.name),
         takenAt: photo.taken_at,
         // Photos not yet analyzed still carry their Apple caption in `description`.
         appleCaption: photo.apple_caption ?? photo.description,
+        // Without these, the new description would drop context Matt already added.
+        contextNotes: getContextNotesForPhoto(photo.id, userId).map((n) => n.text),
       });
       usage.inputTokens += photoUsage.inputTokens;
       usage.outputTokens += photoUsage.outputTokens;

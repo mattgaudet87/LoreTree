@@ -356,10 +356,14 @@ export function addContextNote(
 export function undoLastContextNote(photoId: string, userId = DEFAULT_USER_ID): PhotoWithTags | null {
   const note = db
     .prepare(
-      `SELECT id, prev_description, added_tag_ids FROM context_notes
-       WHERE photo_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1`
+      `SELECT n.id, n.prev_description, n.added_tag_ids,
+              (p.analyzed_at IS NOT NULL AND p.analyzed_at >= n.created_at) AS analyzed_since
+       FROM context_notes n JOIN photos p ON p.id = n.photo_id
+       WHERE n.photo_id = ? AND n.user_id = ? ORDER BY n.id DESC LIMIT 1`
     )
-    .get(photoId, userId) as { id: number; prev_description: string | null; added_tag_ids: string | null } | undefined;
+    .get(photoId, userId) as
+    | { id: number; prev_description: string | null; added_tag_ids: string | null; analyzed_since: number }
+    | undefined;
 
   if (!note) return getPhotoById(photoId, userId);
 
@@ -372,11 +376,15 @@ export function undoLastContextNote(photoId: string, userId = DEFAULT_USER_ID): 
     );
   }
 
-  db.prepare(`UPDATE photos SET description = ? WHERE id = ? AND user_id = ?`).run(
-    note.prev_description,
-    photoId,
-    userId
-  );
+  // If the photo was analyzed after this note, the saved description predates
+  // the AI's, so restoring it would throw away the analysis. Keep the current one.
+  if (!note.analyzed_since) {
+    db.prepare(`UPDATE photos SET description = ? WHERE id = ? AND user_id = ?`).run(
+      note.prev_description,
+      photoId,
+      userId
+    );
+  }
   db.prepare(`DELETE FROM context_notes WHERE id = ? AND user_id = ?`).run(note.id, userId);
   deleteOrphanTags(userId);
 

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import type { PhotoWithTags } from "@/lib/types";
 import { photoImageUrl } from "@/lib/image-url";
-import { longCaption } from "@/lib/caption";
+import { captionTagsFor, longCaption } from "@/lib/caption";
 import { formatPhotoDate } from "@/lib/format";
 import { useImageMode } from "@/lib/use-image-mode";
 import ImageModeToggle from "@/components/ImageModeToggle";
@@ -33,9 +33,7 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const eventTag = photo.tags.find((t) => t.type === "event");
-  const peopleNames = photo.tags.filter((t) => t.type === "person").map((t) => t.name);
-  const caption = longCaption({ eventName: eventTag?.name ?? null, placeName: photo.place_name, peopleNames });
+  const caption = longCaption(captionTagsFor(photo.tags));
 
   return (
     <div className="fixed inset-0 z-30 bg-black" onClick={onClose}>

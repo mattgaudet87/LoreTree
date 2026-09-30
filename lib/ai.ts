@@ -68,6 +68,8 @@ export interface PhotoContext {
   appleLabels: string[];
   takenAt: string | null;
   appleCaption: string | null;
+  // Context notes Matt added before this analysis, oldest first.
+  contextNotes: string[];
 }
 
 function buildAnalysisPrompt(context: PhotoContext): string {
@@ -80,6 +82,9 @@ function buildAnalysisPrompt(context: PhotoContext): string {
     context.place ? `Place: ${context.place}.` : null,
     context.takenAt ? `Taken: ${context.takenAt}.` : null,
     context.appleCaption ? `The owner wrote this caption himself in Apple Photos, so treat it as true and keep its meaning: "${context.appleCaption}".` : null,
+    context.contextNotes.length > 0
+      ? `The owner wrote these notes about this photo himself, so treat them as true and weave them into the description: ${context.contextNotes.map((n) => `"${n}"`).join(" ")}.`
+      : null,
     context.eventName ? `Apple's automatic event name: "${context.eventName}".` : null,
     context.appleLabels.length > 0 ? `Apple's scene labels: ${context.appleLabels.join(", ")}.` : null,
   ]
