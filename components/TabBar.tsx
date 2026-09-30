@@ -3,12 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
-
-const HOME_ICON = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0">
-    <path d="M4 11.5 12 4l8 7.5M6 10v9h12v-9" />
-  </svg>
-);
+import { useEscape } from "@/lib/use-escape";
 
 const LORE_ICON = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0">
@@ -22,7 +17,7 @@ const LORE_ICON = (
 );
 
 const ADD_LORE_ICON = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-[26px] w-[26px] shrink-0">
     <circle cx="12" cy="12" r="9" />
     <path d="M12 8v8M8 12h8" />
   </svg>
@@ -56,45 +51,49 @@ export default function TabBar() {
   const onLore = pathname?.startsWith("/lore") ?? false;
   const searchActive = onLore && searchParams.get("search") === "1";
   const [addLoreOpen, setAddLoreOpen] = useState(false);
+  useEscape(() => setAddLoreOpen(false), addLoreOpen);
 
-  const linkClass = (active: boolean) =>
-    `flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs transition-colors md:text-sm ${
-      active ? "text-accent" : "text-text-muted hover:text-text"
-    }`;
+  // Every item is a 44px tap target. The active one gets a circle behind it.
+  const itemClass = "flex h-11 w-11 items-center justify-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent";
+  const tabClass = (active: boolean) =>
+    `${itemClass} ${active ? "bg-text text-bg" : "text-text-muted hover:text-text"}`;
 
   return (
     <>
-      <nav className="group fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/95 backdrop-blur md:inset-y-0 md:inset-x-auto md:left-0 md:top-0 md:flex md:w-20 md:flex-col md:border-r md:border-t-0 md:bg-surface/95 md:py-4 md:transition-[width] md:duration-200 md:hover:w-52">
-        <div className="mx-auto flex max-w-md items-stretch justify-around md:mx-0 md:max-w-none md:flex-col md:items-stretch md:justify-start md:gap-1 md:px-2">
-          <Link href="/feed" className={`${linkClass(pathname?.startsWith("/feed") ?? false)} flex-1 flex-col md:flex-none md:flex-row`}>
-            {HOME_ICON}
-            <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Home</span>
-          </Link>
+      <nav
+        aria-label="Main"
+        className="fixed left-1/2 z-20 flex h-[60px] w-[300px] -translate-x-1/2 items-center justify-around rounded-full border border-border bg-nav-glass px-2 backdrop-blur-xl"
+        style={{ bottom: "calc(20px + env(safe-area-inset-bottom))" }}
+      >
+        <Link
+          href="/feed"
+          aria-label="Home"
+          className={`${itemClass} ${pathname?.startsWith("/feed") ? "bg-white/10 shadow-[inset_0_0_0_1.5px_var(--text)]" : ""}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="" className="h-7 w-7 rounded-lg" />
+        </Link>
 
-          <Link href="/lore" className={`${linkClass(onLore && !searchActive)} flex-1 flex-col md:flex-none md:flex-row`}>
-            {LORE_ICON}
-            <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Lore</span>
-          </Link>
+        <Link href="/lore" aria-label="Lore" className={tabClass(onLore && !searchActive)}>
+          {LORE_ICON}
+        </Link>
 
-          <button
-            type="button"
-            onClick={() => setAddLoreOpen(true)}
-            className={`${linkClass(pathname?.startsWith("/add-lore") ?? false)} flex-1 flex-col md:flex-none md:flex-row`}
-          >
-            {ADD_LORE_ICON}
-            <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Add Lore</span>
-          </button>
+        <button
+          type="button"
+          aria-label="Add Lore"
+          onClick={() => setAddLoreOpen(true)}
+          className={`${itemClass} text-accent ${pathname?.startsWith("/add-lore") ? "bg-white/10" : ""}`}
+        >
+          {ADD_LORE_ICON}
+        </button>
 
-          <Link href="/search" className={`${linkClass(searchActive)} flex-1 flex-col md:flex-none md:flex-row`}>
-            {SEARCH_ICON}
-            <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Search</span>
-          </Link>
+        <Link href="/search" aria-label="Search" className={tabClass(searchActive)}>
+          {SEARCH_ICON}
+        </Link>
 
-          <Link href="/profile" className={`${linkClass(pathname?.startsWith("/profile") ?? false)} flex-1 flex-col md:flex-none md:flex-row`}>
-            {PROFILE_ICON}
-            <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Profile</span>
-          </Link>
-        </div>
+        <Link href="/profile" aria-label="Profile" className={tabClass(pathname?.startsWith("/profile") ?? false)}>
+          {PROFILE_ICON}
+        </Link>
       </nav>
 
       {addLoreOpen && (
@@ -103,7 +102,7 @@ export default function TabBar() {
           onClick={() => setAddLoreOpen(false)}
         >
           <div
-            className="mb-20 w-full max-w-sm rounded-2xl border border-border bg-surface p-4 shadow-xl md:mb-0"
+            className="mb-28 w-full max-w-sm rounded-2xl border border-border bg-surface p-4 shadow-xl md:mb-0"
             onClick={(e) => e.stopPropagation()}
           >
             <p className="mb-3 px-1 text-sm font-semibold text-text">Add Lore</p>

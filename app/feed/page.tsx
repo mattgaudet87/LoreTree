@@ -1,9 +1,10 @@
 import { Suspense } from "react";
+import LoadingScreen from "@/components/LoadingScreen";
 import FeedClient from "./feed-client";
 
 export default function FeedPage() {
   return (
-    <Suspense fallback={<div className="h-[calc(100dvh-5rem)] w-full bg-surface" />}>
+    <Suspense fallback={<LoadingScreen />}>
       <FeedClient />
     </Suspense>
   );

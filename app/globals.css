@@ -1,20 +1,24 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #111013;
-  --surface: #1b1a1e;
-  --surface-2: #25232a;
-  --border: #34313a;
-  --text: #f4f1ec;
-  --text-muted: #9a958f;
-  --accent: #8b7cff;
-  --node-people: #8b7cff;
-  --node-categories: #3ccb9a;
-  --node-places: #ff8a5b;
-  --node-events: #f5b942;
-  --node-years: #9a958f;
-  --banner-from: #6d5dfc;
-  --banner-to: #ff6fa3;
+  --bg: #0d1413;
+  --surface: #15201e;
+  --surface-2: #1d2a28;
+  --border: #2a3a37;
+  --text: #f4f1e6;
+  --text-muted: #93a39e;
+  --text-soft: #c4d0cb;
+  --text-inactive: #5e6f6b;
+  --accent: #5fc48d;
+  --node-people: #5fc48d;
+  --node-categories: #3fb5a8;
+  --node-places: #5aaeea;
+  --node-events: #f2d58a;
+  --node-years: #93a39e;
+  --banner-from: #2f9e6e;
+  --banner-to: #5aaeea;
+  --glass: rgba(255, 255, 255, 0.12);
+  --nav-glass: rgba(21, 32, 30, 0.88);
 }
 
 @theme inline {
@@ -24,7 +28,11 @@
   --color-border: var(--border);
   --color-text: var(--text);
   --color-text-muted: var(--text-muted);
+  --color-text-soft: var(--text-soft);
+  --color-text-inactive: var(--text-inactive);
   --color-accent: var(--accent);
+  --color-glass: var(--glass);
+  --color-nav-glass: var(--nav-glass);
   --color-node-people: var(--node-people);
   --color-node-categories: var(--node-categories);
   --color-node-places: var(--node-places);
@@ -42,4 +50,24 @@ body {
 
 .banner-gradient {
   background-image: linear-gradient(90deg, var(--banner-from), var(--banner-to));
+}
+
+@keyframes loading-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+.loading-bar {
+  animation: loading-slide 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-bar {
+    animation: none;
+    transform: translateX(100%);
+  }
 }

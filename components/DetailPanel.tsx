@@ -17,12 +17,18 @@ interface DetailPanelProps {
   photo: PhotoWithTags;
   onClose: () => void;
   onPhotoChange: (photo: PhotoWithTags) => void;
+  // Opens with the "Add context" box already showing (from the feed's Context button).
+  initialContextOpen?: boolean;
 }
 
 /** The full-screen photo view: image on the back, description, tags, and actions on top. */
-export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPanelProps) {
+export default function DetailPanel({ photo, onClose, onPhotoChange, initialContextOpen = false }: DetailPanelProps) {
   const [imageMode, selectImageMode] = useImageMode();
   const context = useContextNotes(photo, onPhotoChange);
+
+  // Declared after useContextNotes so its reset-on-mount runs first and this wins.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (initialContextOpen) context.setOpen(true); }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

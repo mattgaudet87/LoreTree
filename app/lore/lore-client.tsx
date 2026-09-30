@@ -2,19 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
-import NodeGraph from "@/components/NodeGraph";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
+import { useEscape } from "@/lib/use-escape";
+import OrbitMap from "@/components/OrbitMap";
 import { parsePath, type PathSegment } from "@/lib/queries/filters";
 import type { NetworkNode } from "@/lib/queries/network";
 import type { PhotoWithTags } from "@/lib/types";
-import { MAP_TYPES, MAP_TYPE_COLOR } from "@/lib/node-types";
-import type { YearTagSummary, MonthTagSummary } from "@/lib/queries/timeline";
+import { MAP_TYPES } from "@/lib/node-types";
+import type { TimelineData } from "@/lib/queries/timeline";
 import type { SearchResult } from "@/lib/queries/search";
 import LorePhotoGrid from "./LorePhotoGrid";
 import LoreSearchResults from "./LoreSearchResults";
 import LoreTimeline from "./LoreTimeline";
 import LoreToolbar from "./LoreToolbar";
-import { BackButton } from "./lore-ui";
 import {
   GRID_LIMIT,
   TIMELINE_START_OPTIONS,
@@ -53,11 +53,12 @@ export default function LoreClient() {
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [searchFailed, setSearchFailed] = useState(false);
   const [data, setData] = useState<NetworkData | null>(null);
-  const [timelineYears, setTimelineYears] = useState<YearTagSummary[] | null>(null);
-  const [timelineMonths, setTimelineMonths] = useState<MonthTagSummary[] | null>(null);
+  const [timeline, setTimeline] = useState<TimelineData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [grid, setGrid] = useState<GridState | null>(null);
   const [gridLoading, setGridLoading] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEscape(() => setMoreOpen(false), moreOpen);
   const { savedFilters, saveFilter, deleteFilter } = useSavedFilters();
 
   const segments = useMemo(() => {
@@ -150,15 +151,8 @@ export default function LoreClient() {
         if (!res.ok) throw new Error("Could not load the timeline");
         return res.json();
       })
-      .then((result: { years?: YearTagSummary[]; months?: MonthTagSummary[] }) => {
-        if (cancelled) return;
-        if (result.months) {
-          setTimelineMonths(result.months);
-          setTimelineYears(null);
-        } else {
-          setTimelineYears(result.years ?? []);
-          setTimelineMonths(null);
-        }
+      .then((result: TimelineData) => {
+        if (!cancelled) setTimeline(result);
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Something went wrong");
@@ -283,12 +277,6 @@ export default function LoreClient() {
     setParams({ path: parent, show: null });
   }
 
-  function timelineBack() {
-    if (!yearParam) return;
-    setGrid(null);
-    setParams({ year: null });
-  }
-
   function clearFilters() {
     setQuery("");
     setParams({ path: null, show: null, year: null, q: null });
@@ -309,13 +297,12 @@ export default function LoreClient() {
 
   const centerLabel = data?.center ? data.center.label : "All";
   const centerCount = data?.center ? data.center.count : (data?.total ?? 0);
-  const centerColor = data?.center ? MAP_TYPE_COLOR[data.center.type] : "var(--accent)";
 
   return (
-    <div className="flex min-h-[calc(100dvh-5rem)] flex-col">
+    <MotionConfig reducedMotion="user">
+    <div className="flex min-h-dvh flex-col pb-28">
       <LoreToolbar
         view={view}
-        start={start}
         path={path}
         show={show}
         yearParam={yearParam}
@@ -323,6 +310,7 @@ export default function LoreClient() {
         effectiveType={data?.effectiveType ?? null}
         crumbs={crumbs}
         setParams={setParams}
+        onMapBack={mapBack}
         searchOpen={searchOpen}
         onToggleSearch={toggleSearch}
         query={query}
@@ -339,8 +327,7 @@ export default function LoreClient() {
       {trimmedQuery && <LoreSearchResults query={trimmedQuery} result={searchResult} failed={searchFailed} backHref={searchBackHref} />}
 
       {!trimmedQuery && view === "map" && (
-        <div className="relative flex flex-1 flex-col px-6 py-4">
-          {segments.length > 0 && <BackButton onClick={mapBack} />}
+        <div className="relative flex flex-1 flex-col px-4 pt-12">
           {error && <p className="flex-1 text-sm text-text-muted">{error}</p>}
 
           {!error && data && (
@@ -351,16 +338,23 @@ export default function LoreClient() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 1.15 }}
                 transition={{ duration: 0.3 }}
-                className="flex w-full flex-1 items-center justify-center"
+                className="flex w-full flex-col items-center"
               >
-                <NodeGraph
+                <OrbitMap
                   centerLabel={centerLabel}
                   centerCount={centerCount}
-                  centerColor={centerColor}
                   nodes={data.nodes}
                   onSelect={selectNode}
                   onViewImages={() => openGrid({ path })}
                 />
+                {data.more.length > 0 && (
+                  <button
+                    onClick={() => setMoreOpen(true)}
+                    className="mt-14 h-8 rounded-full border border-border px-3.5 text-xs font-medium text-text-muted outline-none transition-colors hover:text-text focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    +{data.more.length} more
+                  </button>
+                )}
               </motion.div>
             </AnimatePresence>
           )}
@@ -370,18 +364,44 @@ export default function LoreClient() {
       {!trimmedQuery && view === "timeline" && (
         <LoreTimeline
           start={start}
-          yearParam={yearParam}
-          years={timelineYears}
-          months={timelineMonths}
+          years={timeline?.years ?? null}
+          selectedYear={timeline?.selectedYear ?? null}
+          months={timeline?.months ?? null}
           error={error}
           gridLoading={gridLoading}
           openGrid={openGrid}
           setParams={setParams}
-          onBack={timelineBack}
         />
+      )}
+
+      {moreOpen && data && (
+        <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 md:items-center" onClick={() => setMoreOpen(false)}>
+          <div
+            className="mb-28 flex max-h-[60vh] w-full max-w-sm flex-col rounded-2xl border border-border bg-surface p-4 shadow-xl md:mb-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="mb-3 px-1 text-sm font-semibold text-text">More</p>
+            <div className="flex flex-col gap-1 overflow-y-auto">
+              {data.more.map((node) => (
+                <button
+                  key={`${node.type}:${node.value}`}
+                  onClick={() => {
+                    setMoreOpen(false);
+                    selectNode(node);
+                  }}
+                  className="flex items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm text-text transition-colors hover:bg-surface-2"
+                >
+                  <span className="truncate">{node.label}</span>
+                  <span className="ml-3 shrink-0 text-xs text-text-muted">{node.count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       {grid && <LorePhotoGrid key={grid.id} grid={grid} onTagged={() => setDataVersion((v) => v + 1)} />}
     </div>
+    </MotionConfig>
   );
 }

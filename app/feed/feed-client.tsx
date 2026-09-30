@@ -1,11 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import LoadingScreen from "@/components/LoadingScreen";
 import type { TouchEvent as ReactTouchEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import PhotoCard from "@/components/PhotoCard";
-import ImageModeToggle from "@/components/ImageModeToggle";
+import FeedTopBar from "@/components/FeedTopBar";
+import PeopleRow from "@/components/PeopleRow";
+import FeedActionRail from "@/components/FeedActionRail";
+import type { PersonSummary } from "@/lib/queries/people";
 import DetailPanel from "@/components/DetailPanel";
 import type { PhotoWithTags } from "@/lib/types";
 import { photoImageUrl } from "@/lib/image-url";
@@ -37,6 +41,8 @@ export default function FeedClient() {
   const [photos, setPhotos] = useState<PhotoWithTags[] | null>(null);
   const [index, setIndex] = useState(0);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [detailContextOpen, setDetailContextOpen] = useState(false);
+  const [people, setPeople] = useState<PersonSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   // "fit" shows the whole photo, in its original orientation, letterboxed on
   // black. That's the default so nothing gets cropped unless Matt asks for it.
@@ -73,6 +79,19 @@ export default function FeedClient() {
       cancelled = true;
     };
   }, [filter, year, start, ids]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/people?limit=60")
+      .then((res) => (res.ok ? res.json() : { people: [] }))
+      .then(({ people: loaded }: { people: PersonSummary[] }) => {
+        if (!cancelled) setPeople(loaded);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Preload the neighboring photos so next/previous feels instant.
   useEffect(() => {
@@ -154,44 +173,27 @@ export default function FeedClient() {
 
   return (
     <div
-      className="relative h-[calc(100dvh-5rem)] w-full overflow-hidden bg-surface"
+      className="relative h-dvh w-full overflow-hidden bg-surface"
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      {back && (
-        <div className="absolute left-4 top-4 z-10">
-          <button
-            onClick={goBack}
-            aria-label="Back"
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface/80 text-text-muted backdrop-blur transition-colors hover:text-text"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-          </button>
+      <FeedTopBar
+        year={currentPhoto?.year ?? null}
+        filterLabel={label}
+        onClearFilter={() => router.push("/feed")}
+        onBack={back ? goBack : null}
+      >
+        <PeopleRow
+          people={people.slice(0, 8)}
+          activeNames={currentPhoto?.tags.filter((t) => t.type === "person").map((t) => t.name) ?? []}
+        />
+      </FeedTopBar>
+
+      {!error && photos === null && (
+        <div className="absolute inset-0 z-20">
+          <LoadingScreen />
         </div>
       )}
-
-      <ImageModeToggle
-        mode={imageMode}
-        onChange={selectImageMode}
-        className="bottom-28 left-4 border-border bg-surface/80 md:bottom-4"
-      />
-
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-4 pt-4">
-        {label && (
-          <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs text-text-muted backdrop-blur">
-            <span>{label}</span>
-            <button
-              onClick={() => router.push("/feed")}
-              aria-label="Clear filter"
-              className="text-text-muted hover:text-text"
-            >
-              ×
-            </button>
-          </div>
-        )}
-      </div>
 
       {error && (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-text-muted">
@@ -221,12 +223,34 @@ export default function FeedClient() {
           index={index}
           total={photos!.length}
           fitMode={imageMode}
-          onOpenDetail={() => setDetailOpen(true)}
+          people={people}
+          onOpenDetail={() => {
+            setDetailContextOpen(false);
+            setDetailOpen(true);
+          }}
+        />
+      )}
+
+      {!error && currentPhoto && (
+        <FeedActionRail
+          photo={currentPhoto}
+          imageMode={imageMode}
+          onImageModeChange={selectImageMode}
+          onPhotoChange={updatePhoto}
+          onAddContext={() => {
+            setDetailContextOpen(true);
+            setDetailOpen(true);
+          }}
         />
       )}
 
       {detailOpen && currentPhoto && (
-        <DetailPanel photo={currentPhoto} onClose={() => setDetailOpen(false)} onPhotoChange={updatePhoto} />
+        <DetailPanel
+          photo={currentPhoto}
+          onClose={() => setDetailOpen(false)}
+          onPhotoChange={updatePhoto}
+          initialContextOpen={detailContextOpen}
+        />
       )}
     </div>
   );

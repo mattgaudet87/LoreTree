@@ -29,7 +29,7 @@ Personal photo memory app. Reads Matt's Apple Photos library, adds AI descriptio
 - lib/db.ts connection and schema. lib/ai.ts every Claude call. lib/categories.ts fixed category list
 - lib/queries/ read helpers (feed, network, timeline, search, photo tags, filters). findOrCreateTag in photo.ts is shared with the scripts
 - lib/caption.ts feed and detail captions. lib/import-settings.ts which album or library to import
-- components/ shared UI (TabBar, PhotoCard, DetailPanel, MicButton, NodeGraph)
+- components/ shared UI (TabBar floating nav, LoadingScreen, PhotoCard, FeedTopBar, PeopleRow, FeedActionRail, DetailPanel, OrbitMap, MicButton)
 - scripts/import-photos.ts Apple Photos importer (npm run import). scripts/seed-sample.ts sample data
 - data/ database and images. NEVER commit. Must stay in .gitignore.
 
@@ -59,11 +59,18 @@ Personal photo memory app. Reads Matt's Apple Photos library, adds AI descriptio
 - Saves data/images/display/{uuid}.jpg (1600px) and data/images/thumb/{uuid}.jpg (400px).
 
 ## Design: LoreTree has its own look (not Wolf Creative)
-- Dark and photo-first. Tokens are CSS variables in app/globals.css. Use them, never raw hex in components.
-- bg #111013, surface #1B1A1E, surface-2 #25232A, border #34313A
-- text #F4F1EC, text-muted #9A958F, accent #8B7CFF
-- Node colors: people #8B7CFF, categories #3CCB9A, places #FF8A5B, events #F5B942, years #9A958F
-- View photos banner: gradient #6D5DFC to #FF6FA3
+- Dark and photo-first, with a forest-green palette taken from the logo. Tokens are CSS variables in app/globals.css. Use them, never raw hex in components.
+- bg #0d1413, surface #15201e, surface-2 #1d2a28, border #2a3a37
+- text #f4f1e6, text-muted #93a39e, text-soft #c4d0cb, text-inactive #5e6f6b (only for 20px+ headings), accent #5fc48d (leaf green)
+- Node colors: people #5fc48d, categories #3fb5a8, places #5aaeea, events #f2d58a, years #93a39e
+- View photos banner: gradient #2f9e6e to #5aaeea
+- Glass: --glass (round buttons/chips over photos), --nav-glass (floating nav pill)
+- Logo: public/logo.png (also app/icon.png and app/apple-icon.png). Loading screen: components/LoadingScreen.tsx
+- Navigation is a floating pill at the bottom (components/TabBar.tsx): Home (logo), Lore, Add Lore, Search, Profile. No labels. Pages add their own pb-28 so content clears it. Settings is reached by the gear on Home, in the Lore "..." menu, and by a gear on the other pages.
+- Home feed: full-bleed photo, top bar (logo, year chip, gear), people row (top 8 people, tap to filter), right-side rail (Profile star, Context, Share, Fit/Zoom), caption block, progress track.
+- Lore Map: OrbitMap, a center circle with nodes on two dashed rings, each showing a cover photo (best highlight score in the current path). Type chips (People, Place, Event, Date) and breadcrumbs sit above it.
+- Lore Timeline: a row of year buttons, a summary line with View all, and 12 month tiles with cover photos. Empty months are dimmed.
+- Motion respects prefers-reduced-motion (loading bar, map animations). Esc closes sheets and the photo grid.
 - Fonts: Inter for UI. Fraunces (serif) for photo descriptions and Reminisce questions.
 - Must work at phone width (390px), with a Mac trackpad, and with arrow keys.
 

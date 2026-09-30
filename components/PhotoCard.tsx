@@ -4,7 +4,10 @@ import { useRef, useState } from "react";
 import type { TouchEvent as ReactTouchEvent, MouseEvent as ReactMouseEvent } from "react";
 import type { PhotoWithTags } from "@/lib/types";
 import { photoImageUrl } from "@/lib/image-url";
-import { captionTagsFor, shortCaption } from "@/lib/caption";
+import Link from "next/link";
+import { captionTagsFor, joinNames, shortCaption } from "@/lib/caption";
+import { valueSegment } from "@/lib/queries/filters";
+import type { PersonSummary } from "@/lib/queries/people";
 import { formatPhotoDate } from "@/lib/format";
 import type { ImageFitMode } from "@/lib/image-mode";
 
@@ -16,6 +19,8 @@ interface PhotoCardProps {
   total: number;
   fitMode: ImageFitMode;
   onOpenDetail: () => void;
+  // Cover photos for people, used for the little avatars above the caption.
+  people: PersonSummary[];
 }
 
 const MIN_SCALE = 1;
@@ -35,7 +40,7 @@ type Gesture =
   | { mode: "pinch"; startDist: number; startScale: number }
   | { mode: "pan"; startX: number; startY: number; startTranslate: { x: number; y: number } };
 
-export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail }: PhotoCardProps) {
+export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail, people }: PhotoCardProps) {
   const [scale, setScale] = useState(1);
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
   const [interacting, setInteracting] = useState(false);
@@ -103,7 +108,16 @@ export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail }
     onOpenDetail();
   }
 
-  const caption = shortCaption(captionTagsFor(photo.tags));
+  const tags = captionTagsFor(photo.tags);
+  const caption = shortCaption(tags);
+  const peopleNames = tags.peopleNames;
+  const heading = caption ?? photo.description;
+  const showDescription = !!caption && !!photo.description && photo.description !== caption;
+  const pills = (["place", "event", "category"] as const)
+    .map((type) => ({ type, name: photo.tags.find((t) => t.type === type)?.name }))
+    .filter((p): p is { type: "place" | "event" | "category"; name: string } => !!p.name);
+  const pillDot = { place: "bg-node-places", event: "bg-node-events", category: "bg-node-categories" } as const;
+  const thumbTop = total > 1 ? (index / (total - 1)) * (120 - 14) : 0;
 
   return (
     <div
@@ -119,7 +133,7 @@ export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail }
       <img
         src={photoImageUrl(photo, "display")}
         alt={photo.description ?? "Photo"}
-        className={`absolute inset-0 h-full w-full ${fitMode === "fit" ? "object-contain" : "object-cover"}`}
+        className={`absolute inset-0 h-full w-full motion-reduce:!transition-none ${fitMode === "fit" ? "object-contain" : "object-cover"}`}
         style={{
           transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
           transition: interacting ? "none" : "transform 150ms ease-out",
@@ -127,27 +141,82 @@ export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail }
         draggable={false}
       />
 
-      {photo.year && (
-        <span className="pointer-events-none absolute right-4 top-16 rounded-full border border-white/20 bg-black/50 px-2.5 py-1 text-xs font-medium text-text backdrop-blur">
-          {photo.year}
-        </span>
-      )}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-[190px]"
+        style={{ backgroundImage: "linear-gradient(to bottom, rgba(0,0,0,.7), transparent)" }}
+      />
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[420px]"
+        style={{ backgroundImage: "linear-gradient(to top, rgba(0,0,0,.88), rgba(0,0,0,.45) 55%, transparent)" }}
+      />
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-4 pb-6 pt-16 md:inset-x-auto md:inset-y-auto md:bottom-6 md:right-6 md:left-auto md:top-auto md:w-80 md:max-w-[calc(100%-3rem)] md:rounded-2xl md:border md:border-white/10 md:bg-none md:bg-black/60 md:p-4 md:pt-4 md:backdrop-blur-md md:shadow-2xl">
-        {caption ? (
-          <p className="text-sm text-text">{caption}</p>
-        ) : photo.description ? (
-          <p className="line-clamp-2 text-sm text-text">{photo.description}</p>
-        ) : (
-          // Tapping the card opens the detail view, which has "Analyze this photo".
-          <p className="text-sm text-text-muted">No description yet — tap to analyze</p>
+      {/* Progress through the feed */}
+      <div className="pointer-events-none absolute right-1 h-[120px] w-[3px] rounded-full bg-white/15" style={{ top: 260 }}>
+        <div className="absolute left-0 h-3.5 w-[3px] rounded-full bg-text" style={{ top: thumbTop }} />
+      </div>
+
+      <div className="pointer-events-none absolute bottom-[100px] left-4 right-[72px] flex flex-col gap-2.5">
+        {peopleNames.length > 0 && (
+          <div className="flex items-center gap-2.5">
+            <div className="flex">
+              {peopleNames.slice(0, 4).map((name, i) => {
+                const person = people.find((p) => p.name === name);
+                return person ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={name}
+                    src={photoImageUrl({ id: person.coverId, image_version: person.coverVersion }, "thumb")}
+                    alt=""
+                    className={`h-7 w-7 rounded-full border-2 border-black object-cover ${i > 0 ? "-ml-2" : ""}`}
+                    draggable={false}
+                  />
+                ) : (
+                  <span
+                    key={name}
+                    className={`flex h-7 w-7 items-center justify-center rounded-full border-2 border-black bg-surface-2 text-[11px] font-semibold text-text ${i > 0 ? "-ml-2" : ""}`}
+                  >
+                    {name.charAt(0)}
+                  </span>
+                );
+              })}
+            </div>
+            <span className="truncate text-sm font-semibold text-text">{joinNames(peopleNames)}</span>
+          </div>
         )}
-        <div className="mt-2 flex items-center justify-between text-xs text-text-muted">
-          <span>{formatPhotoDate(photo.taken_at)}</span>
-          <span>
-            {index + 1} of {total}
-          </span>
-        </div>
+
+        {heading ? (
+          <p className="font-serif text-xl leading-tight text-text">{heading}</p>
+        ) : (
+          <Link
+            href="/settings"
+            onClick={(e) => e.stopPropagation()}
+            className="pointer-events-auto text-sm text-text-soft underline"
+          >
+            No description yet — analyze it in Settings
+          </Link>
+        )}
+
+        {showDescription && <p className="line-clamp-2 text-[13px] leading-snug text-white/80">{photo.description}</p>}
+
+        {pills.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {pills.map((pill) => (
+              <Link
+                key={pill.type}
+                href={`/feed?filter=${encodeURIComponent(valueSegment(pill.type, pill.name))}`}
+                onClick={(e) => e.stopPropagation()}
+                className="pointer-events-auto flex h-[26px] max-w-full items-center gap-1.5 rounded-full bg-glass px-2.5 text-xs text-text outline-none backdrop-blur focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${pillDot[pill.type]}`} />
+                <span className="truncate">{pill.name}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        <p className="text-xs text-text-muted">
+          {formatPhotoDate(photo.taken_at)} · {index + 1} of {total}
+        </p>
       </div>
     </div>
   );

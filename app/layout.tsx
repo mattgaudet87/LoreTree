@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Inter, Fraunces } from "next/font/google";
 import TabBar from "@/components/TabBar";
-import SettingsLink from "@/components/SettingsLink";
 import "./globals.css";
 
 const inter = Inter({
@@ -28,8 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${fraunces.variable} bg-bg text-text antialiased`}>
-        <SettingsLink />
-        <main className="min-h-dvh pb-20 md:pb-0 md:pl-20">{children}</main>
+        <main className="min-h-dvh">{children}</main>
         {/* TabBar reads the address's query string, which Next.js requires inside Suspense. */}
         <Suspense fallback={null}>
           <TabBar />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useEscape } from "@/lib/use-escape";
 import { photoImageUrl } from "@/lib/image-url";
 import { fetchTagSuggestions } from "@/lib/tag-suggestions";
 import { ADDABLE_TAG_TYPES } from "@/lib/tag-types";
@@ -22,6 +23,8 @@ export default function LorePhotoGrid({ grid, onTagged }: LorePhotoGridProps) {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkDone, setBulkDone] = useState<string | null>(null);
+
+  useEscape(grid.onClose);
 
   function toggleSelected(id: string) {
     setSelectedIds((prev) => {
@@ -76,7 +79,7 @@ export default function LorePhotoGrid({ grid, onTagged }: LorePhotoGridProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-bg md:left-20">
+    <div className="fixed inset-0 z-30 flex flex-col bg-bg">
       <div className="flex items-center gap-3 px-4 py-4">
         <button
           onClick={() => grid.onClose()}
@@ -99,14 +102,14 @@ export default function LorePhotoGrid({ grid, onTagged }: LorePhotoGridProps) {
               : `${grid.photos.length} photo${grid.photos.length === 1 ? "" : "s"}`}
         </p>
       </div>
-      <div className="grid flex-1 auto-rows-min grid-cols-3 gap-2 overflow-y-auto px-4 pb-4 sm:grid-cols-4 md:grid-cols-6">
+      <div className="grid flex-1 auto-rows-min grid-cols-3 gap-2 overflow-y-auto px-4 pb-28 sm:grid-cols-4 md:grid-cols-6">
         {grid.photos.map((p) => {
           const selected = selectedIds.has(p.id);
           return (
             <a
               key={p.id}
               href={`/feed?ids=${encodeURIComponent(grid.photos.map((gp) => gp.id).join(","))}&start=${p.id}&back=${encodeURIComponent(grid.backHref)}`}
-              className="relative block aspect-square overflow-hidden rounded-lg border border-border bg-surface-2"
+              className="relative block aspect-square overflow-hidden rounded-xl bg-surface-2"
             >
               {p.thumb_path && (
                 // eslint-disable-next-line @next/next/no-img-element

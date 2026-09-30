@@ -32,17 +32,11 @@ export interface NetworkData {
   center: CenterNode | null;
   effectiveType: NetworkNodeType | null;
   nodes: NetworkNode[];
+  more: NetworkNode[];
 }
 
 // The most photos the grid loads at once (the feed API's own cap).
 export const GRID_LIMIT = 200;
-
-/** "View 40 photos", or "View 200 of 1,500 photos" when the list is cut short. */
-export function viewPhotosLabel(total: number): string {
-  const shown = Math.min(total, GRID_LIMIT);
-  const count = total > GRID_LIMIT ? `${shown.toLocaleString()} of ${total.toLocaleString()}` : `${total.toLocaleString()}`;
-  return `View ${count} photo${total === 1 ? "" : "s"}`;
-}
 
 /** The full-screen photo grid that opens from the Map or Timeline. */
 export interface GridState {

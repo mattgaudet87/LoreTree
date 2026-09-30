@@ -50,7 +50,7 @@ export default function LoreSearchResults({ query, result, failed, backHref }: L
                   <a
                     key={v.value}
                     href={feedHref(`&filter=${encodeURIComponent(valueSegment(type, v.value))}`)}
-                    className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-text transition-colors hover:border-accent"
+                    className="rounded-full bg-surface px-3 py-1.5 text-xs text-text transition-colors hover:border-accent"
                   >
                     {v.value} <span className="text-text-muted">({v.count})</span>
                   </a>
@@ -64,7 +64,7 @@ export default function LoreSearchResults({ query, result, failed, backHref }: L
               <a
                 key={p.id}
                 href={feedHref(`&start=${p.id}`)}
-                className="relative block aspect-square overflow-hidden rounded-lg border border-border bg-surface-2"
+                className="relative block aspect-square overflow-hidden rounded-2xl bg-surface"
               >
                 {p.thumb_path && (
                   // eslint-disable-next-line @next/next/no-img-element

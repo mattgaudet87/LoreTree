@@ -1,4 +1,5 @@
 import { db, DEFAULT_USER_ID } from "@/lib/db";
+import { HIGHLIGHT_SQL } from "@/lib/queries/highlight";
 import { buildFilterSQL, isNetworkNodeType, parsePath, valueFilters, type ValueFilter } from "@/lib/queries/filters";
 import { MAP_TYPES } from "@/lib/node-types";
 import type { NetworkNodeType } from "@/lib/types";
@@ -8,6 +9,9 @@ export interface NetworkNode {
   value: string;
   label: string;
   count: number;
+  // The node's best photo within the current path, for the picture in its circle.
+  coverId: string | null;
+  coverVersion: string | null;
 }
 
 export interface CenterNode {
@@ -21,7 +25,48 @@ export interface NetworkResponse {
   total: number;
   center: CenterNode | null;
   effectiveType: NetworkNodeType | null;
+  // The first MAX_MAP_NODES values, largest first, each with a cover photo.
   nodes: NetworkNode[];
+  // Any further values, shown as a plain list behind the "+N" chip.
+  more: NetworkNode[];
+}
+
+// How many values get a circle on the map.
+const MAX_MAP_NODES = 12;
+// How many values are looked at in all (the rest of the list is cut off).
+const MAX_VALUES = 100;
+
+function coverPhoto(filters: ValueFilter[], userId: string): { coverId: string | null; coverVersion: string | null } {
+  const { sql, params } = buildFilterSQL(filters, userId, "p");
+  const row = db
+    .prepare(
+      `SELECT p.id as id, p.images_updated_at as version FROM photos p
+       WHERE p.user_id = ? AND p.thumb_path IS NOT NULL${sql}
+       ORDER BY ${HIGHLIGHT_SQL} DESC, p.taken_at DESC LIMIT 1`
+    )
+    .get(userId, ...params) as { id: string; version: string | null } | undefined;
+  return { coverId: row?.id ?? null, coverVersion: row?.version ?? null };
+}
+
+function toNodes(
+  type: NetworkNodeType,
+  values: { value: string; count: number }[],
+  filters: ValueFilter[],
+  userId: string
+): { nodes: NetworkNode[]; more: NetworkNode[] } {
+  const make = (v: { value: string; count: number }, withCover: boolean): NetworkNode => ({
+    type,
+    value: v.value,
+    label: v.value,
+    count: v.count,
+    ...(withCover
+      ? coverPhoto([...filters, { nodeType: type, value: v.value }], userId)
+      : { coverId: null, coverVersion: null }),
+  });
+  return {
+    nodes: values.slice(0, MAX_MAP_NODES).map((v) => make(v, true)),
+    more: values.slice(MAX_MAP_NODES).map((v) => make(v, false)),
+  };
 }
 
 function countMatchingPhotos(filters: ValueFilter[], userId: string): number {
@@ -88,23 +133,24 @@ export function getMapLevel(
 
   let effectiveType: NetworkNodeType | null = null;
   let nodes: NetworkNode[] = [];
+  let more: NetworkNode[] = [];
 
   if (showParam && isNetworkNodeType(showParam) && candidateTypes.includes(showParam)) {
-    const values = valuesForType(showParam, filters, userId, 12);
+    const values = valuesForType(showParam, filters, userId, MAX_VALUES);
     effectiveType = showParam;
-    if (isHelpful(values, total)) {
-      nodes = values.map((v) => ({ type: showParam, value: v.value, label: v.value, count: v.count }));
+    if (isHelpful(values.slice(0, MAX_MAP_NODES), total)) {
+      ({ nodes, more } = toNodes(showParam, values, filters, userId));
     }
   } else {
     for (const type of candidateTypes) {
-      const values = valuesForType(type, filters, userId, 12);
-      if (isHelpful(values, total)) {
+      const values = valuesForType(type, filters, userId, MAX_VALUES);
+      if (isHelpful(values.slice(0, MAX_MAP_NODES), total)) {
         effectiveType = type;
-        nodes = values.map((v) => ({ type, value: v.value, label: v.value, count: v.count }));
+        ({ nodes, more } = toNodes(type, values, filters, userId));
         break;
       }
     }
   }
 
-  return { total, center, effectiveType, nodes };
+  return { total, center, effectiveType, nodes, more };
 }

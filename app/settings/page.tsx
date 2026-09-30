@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 interface Stats {
@@ -124,8 +125,13 @@ export default function SettingsPage() {
   const allCost = waiting * (stats?.estimatedCostPerPhoto ?? 0);
 
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-5rem)] max-w-md flex-col gap-6 px-6 py-10">
-      <h1 className="text-lg font-medium text-text">Settings</h1>
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 px-6 pb-28 pt-10">
+      <div className="flex items-center gap-3">
+        <Link href="/feed" aria-label="Back to Home" className="text-sm text-text-muted hover:text-text">
+          &larr; Back
+        </Link>
+        <h1 className="text-lg font-medium text-text">Settings</h1>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <StatTile label="Imported" value={stats?.imported} />
