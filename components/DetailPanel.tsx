@@ -8,7 +8,6 @@ import { formatPhotoDate } from "@/lib/format";
 import { useImageMode } from "@/lib/use-image-mode";
 import ImageModeToggle from "@/components/ImageModeToggle";
 import ActionRow from "@/components/detail/ActionRow";
-import AiDescriptionToggle from "@/components/detail/AiDescriptionToggle";
 import AnalyzeButton from "@/components/detail/AnalyzeButton";
 import ContextEditor from "@/components/detail/ContextEditor";
 import TagSection from "@/components/detail/TagSection";
@@ -78,28 +77,28 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
           <p className="text-xs text-text-muted">{formatPhotoDate(photo.taken_at, "long")}</p>
         </div>
 
-        {caption && <p className="font-serif text-base leading-relaxed text-text">{caption}</p>}
+        {/* The caption is the short "who, what, where" line; the story below it is the heart of the view. */}
+        {caption && <p className="text-sm font-medium text-text">{caption}</p>}
+
+        {photo.description ? (
+          <p className="font-serif text-base leading-relaxed text-text">{photo.description}</p>
+        ) : (
+          <p className="text-sm text-text-muted">No description yet.</p>
+        )}
 
         {context.notes.length > 0 && (
           <div
-            className={`flex flex-col gap-2 transition-colors duration-1000 ${
-              context.showUndo ? "rounded-lg bg-accent/15 px-2 py-1 -mx-2" : ""
+            className={`flex flex-col gap-1.5 transition-colors duration-1000 ${
+              context.showUndo ? "-mx-2 rounded-lg bg-accent/15 px-2 py-1" : ""
             }`}
           >
+            <p className="text-[10px] font-medium uppercase tracking-wide text-text-muted">Your notes</p>
             {context.notes.map((note, i) => (
-              <p key={i} className="text-sm leading-relaxed text-text">
+              <p key={i} className="text-sm leading-relaxed text-text-muted">
                 {note}
               </p>
             ))}
           </div>
-        )}
-
-        {!caption && photo.description && (
-          <p className="font-serif text-base leading-relaxed text-text">{photo.description}</p>
-        )}
-
-        {!caption && !photo.description && context.notes.length === 0 && (
-          <p className="text-sm text-text-muted">No description yet.</p>
         )}
 
         {/* Keyed by photo so each section starts fresh when Matt flips to another photo. */}
@@ -115,7 +114,6 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
           onToggleContext={() => context.setOpen((open) => !open)}
         />
 
-        <AiDescriptionToggle key={`ai-${photo.id}`} photo={photo} />
       </div>
     </div>
   );
