@@ -26,6 +26,11 @@ export function useContextNotes(photo: PhotoWithTags, onPhotoChange: (photo: Pho
     setText("");
     setBusy(false);
     setError(null);
+    // Undo acts on whichever photo is showing, so the bar from the previous
+    // photo must not carry over.
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setShowUndo(false);
+    setNewTagKeys(new Set());
 
     let cancelled = false;
     fetch(`/api/photos/${photo.id}/context`)

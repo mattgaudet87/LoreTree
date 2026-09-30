@@ -34,10 +34,15 @@ function stem(word: string): string {
   return w;
 }
 
+// A photo word matches when it starts with the searched word ("mount" finds
+// "mountain"). The reverse only counts when the photo word is a near-full
+// stem of the searched one ("hik" from "hiking" finds "hike"); otherwise tiny
+// words like "a" or the "s" in "Matt's" would match every search.
 function wordsMatch(target: string, query: string): boolean {
   const st = stem(target);
   const sq = stem(query);
-  return st === sq || st.startsWith(sq) || sq.startsWith(st);
+  if (st === sq || st.startsWith(sq)) return true;
+  return st.length >= 3 && sq.length - st.length <= 2 && sq.startsWith(st);
 }
 
 export function searchPhotos(query: string, userId = DEFAULT_USER_ID): SearchResult {
@@ -45,7 +50,8 @@ export function searchPhotos(query: string, userId = DEFAULT_USER_ID): SearchRes
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .map((w) => w.trim())
-    .filter(Boolean);
+    // Single letters ("a", "i") would match nearly every photo.
+    .filter((w) => w.length > 1);
 
   if (words.length === 0) {
     return { total: 0, photos: [], facets: {} };

@@ -218,6 +218,12 @@ export function editPhotoTag(
           userId
         );
       }
+      // The name is Matt's now, so it must count as his: an Apple-sourced
+      // link would otherwise let AI analysis replace it.
+      db.prepare(`UPDATE photo_tags SET source = 'user' WHERE tag_id = ? AND user_id = ? AND source = 'apple'`).run(
+        existing?.id ?? tag.id,
+        userId
+      );
     }
   } else {
     const newTagId = getOrCreateTag(trimmed, targetType, userId);

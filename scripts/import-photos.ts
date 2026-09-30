@@ -98,6 +98,12 @@ function linkTag(photoId: string, tagId: number) {
   ).run(photoId, tagId, DEFAULT_USER_ID);
 }
 
+const hasOtherEventStmt = db.prepare(`
+  SELECT 1 FROM photo_tags pt JOIN tags t ON t.id = pt.tag_id
+  WHERE pt.photo_id = ? AND pt.user_id = ? AND t.type = 'event' AND t.name != ?
+  LIMIT 1
+`);
+
 const upsertPhoto = db.prepare(`
   INSERT INTO photos (
     id, user_id, taken_at, year, month, week_start, place_name, latitude, longitude,
@@ -291,11 +297,17 @@ async function main() {
       }
     }
 
+    // Apple's automatic "Place, Date" event is only a placeholder. Once the
+    // photo has any other event (from analysis or from Matt), re-importing
+    // must not bring the placeholder back alongside it.
     if (placeName) {
       const eventLabel = `${placeName}, ${formatEventDateLabel(datePart)}`;
-      const event = getOrCreateTag(eventLabel, "event");
-      if (event.created) eventsCreated++;
-      linkTag(record.uuid, event.id);
+      const hasOtherEvent = hasOtherEventStmt.get(record.uuid, DEFAULT_USER_ID, eventLabel);
+      if (!hasOtherEvent) {
+        const event = getOrCreateTag(eventLabel, "event");
+        if (event.created) eventsCreated++;
+        linkTag(record.uuid, event.id);
+      }
     }
   }
 
