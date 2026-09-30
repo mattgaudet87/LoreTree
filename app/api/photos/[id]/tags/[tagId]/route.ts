@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { editPhotoTag, removePhotoTag } from "@/lib/queries/photo";
+import { TAG_TYPES } from "@/lib/tag-types";
 
 export async function DELETE(
   _request: NextRequest,
@@ -15,8 +16,6 @@ export async function DELETE(
   const tags = removePhotoTag(id, tagIdNum);
   return NextResponse.json({ tags });
 }
-
-const TAG_TYPES = ["person", "category", "place", "event", "keyword"] as const;
 
 const patchSchema = z.object({
   name: z.string().min(1),

@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import type { TouchEvent as ReactTouchEvent, MouseEvent as ReactMouseEvent } from "react";
 import type { PhotoWithTags } from "@/lib/types";
 import { photoImageUrl } from "@/lib/image-url";
 import { shortCaption } from "@/lib/caption";
+import { formatPhotoDate } from "@/lib/format";
 import type { ImageFitMode } from "@/lib/image-mode";
 
 export type { ImageFitMode };
@@ -28,13 +30,6 @@ function touchDistance(touches: React.TouchList): number {
   const a = touches[0];
   const b = touches[1];
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 type Gesture =
@@ -136,7 +131,7 @@ export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail }
       />
 
       {photo.year && (
-        <span className="pointer-events-none absolute right-3 top-3 rounded-full border border-white/20 bg-black/50 px-2.5 py-1 text-xs font-medium text-text backdrop-blur">
+        <span className="pointer-events-none absolute right-4 top-16 rounded-full border border-white/20 bg-black/50 px-2.5 py-1 text-xs font-medium text-text backdrop-blur">
           {photo.year}
         </span>
       )}
@@ -144,16 +139,18 @@ export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail }
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-4 pb-6 pt-16 md:inset-x-auto md:inset-y-auto md:bottom-6 md:right-6 md:left-auto md:top-auto md:w-80 md:max-w-[calc(100%-3rem)] md:rounded-2xl md:border md:border-white/10 md:bg-none md:bg-black/60 md:p-4 md:pt-4 md:backdrop-blur-md md:shadow-2xl">
         {caption ? (
           <p className="text-sm text-text">{caption}</p>
+        ) : photo.description ? (
+          <p className="line-clamp-2 text-sm text-text">{photo.description}</p>
         ) : (
           <p className="pointer-events-auto text-sm text-text-muted">
             No description yet —{" "}
-            <a href="/settings" onClick={(e) => e.stopPropagation()} className="underline">
+            <Link href="/settings" onClick={(e) => e.stopPropagation()} className="underline">
               analyze it in Settings
-            </a>
+            </Link>
           </p>
         )}
         <div className="mt-2 flex items-center justify-between text-xs text-text-muted">
-          <span>{formatDate(photo.taken_at)}</span>
+          <span>{formatPhotoDate(photo.taken_at)}</span>
           <span>
             {index + 1} of {total}
           </span>

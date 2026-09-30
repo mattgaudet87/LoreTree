@@ -42,10 +42,10 @@ const PROFILE_ICON = (
   </svg>
 );
 
-const ADD_LORE_OPTIONS = [
+const ADD_LORE_OPTIONS: { href: string; label: string; hint: string; soon?: boolean }[] = [
   { href: "/add-lore/photos", label: "Add Photos", hint: "Import from your library or cloud storage" },
-  { href: "/add-lore/context", label: "Add Context", hint: "Write or yapp about photos that need it" },
-  { href: "/add-lore/cleanup", label: "Clean Library", hint: "Review and remove duplicate photos" },
+  { href: "/add-lore/context", label: "Add Context", hint: "Write or yapp about photos that need it", soon: true },
+  { href: "/add-lore/cleanup", label: "Clean Library", hint: "Review and remove duplicate photos", soon: true },
 ];
 
 export default function TabBar() {
@@ -110,7 +110,14 @@ export default function TabBar() {
                   onClick={() => setAddLoreOpen(false)}
                   className="rounded-xl border border-border bg-surface-2 px-4 py-3 transition-colors hover:border-accent"
                 >
-                  <p className="text-sm font-medium text-text">{opt.label}</p>
+                  <p className="flex items-center gap-2 text-sm font-medium text-text">
+                    {opt.label}
+                    {opt.soon && (
+                      <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-normal uppercase tracking-wide text-text-muted">
+                        Coming soon
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-text-muted">{opt.hint}</p>
                 </Link>
               ))}

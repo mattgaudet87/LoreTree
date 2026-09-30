@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { suggestTags } from "@/lib/queries/photo";
-
-const TAG_TYPES = ["person", "category", "place", "event", "keyword"] as const;
+import { TAG_TYPES } from "@/lib/tag-types";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

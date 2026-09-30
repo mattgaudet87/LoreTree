@@ -25,6 +25,7 @@ export interface PhotoRow {
   apple_score: number | null;
   is_profile: number;
   description: string | null;
+  apple_caption: string | null;
   ai_status: "none" | "done" | "error";
   ai_error: string | null;
   analyzed_at: string | null;

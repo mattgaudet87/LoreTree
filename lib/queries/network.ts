@@ -1,22 +1,7 @@
 import { db, DEFAULT_USER_ID } from "@/lib/db";
 import { buildFilterSQL, isNetworkNodeType, parsePath, valueFilters, type ValueFilter } from "@/lib/queries/filters";
+import { MAP_TYPES } from "@/lib/node-types";
 import type { NetworkNodeType } from "@/lib/types";
-
-// The Map view only ever drills through these four dimensions — never
-// "category", which doesn't have a place in the People/Place/Event/Date
-// taxonomy the map is built around. Order here is the default cascade order:
-// the first type in this list that isn't already used in the path, and
-// whose values actually help distinguish the current set of photos, is what
-// gets shown.
-export const MAP_TYPES: NetworkNodeType[] = ["person", "place", "event", "year"];
-
-const TYPE_LABELS: Record<NetworkNodeType, string> = {
-  person: "People",
-  category: "Categories",
-  place: "Place",
-  event: "Event",
-  year: "Date",
-};
 
 export interface NetworkNode {
   type: NetworkNodeType;
@@ -123,5 +108,3 @@ export function getMapLevel(
 
   return { total, center, effectiveType, nodes };
 }
-
-export { TYPE_LABELS as MAP_TYPE_LABELS };

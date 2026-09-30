@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { addPhotoTag, getPhotoById } from "@/lib/queries/photo";
-
-const TAG_TYPES = ["person", "category", "place", "event", "keyword"] as const;
+import { TAG_TYPES } from "@/lib/tag-types";
 
 const postSchema = z.object({
   name: z.string().min(1),
@@ -24,6 +23,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: "Photo not found" }, { status: 404 });
   }
 
-  const tags = addPhotoTag(id, parsed.data.name, parsed.data.type, "user");
-  return NextResponse.json({ tags });
+  try {
+    const tags = addPhotoTag(id, parsed.data.name, parsed.data.type, "user");
+    return NextResponse.json({ tags });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Could not add tag" },
+      { status: 400 }
+    );
+  }
 }

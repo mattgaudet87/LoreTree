@@ -9,21 +9,22 @@ import type { PhotoRow } from "@/lib/types";
 export const MODELS = {
   analysis: "claude-haiku-4-5",
   context: "claude-haiku-4-5",
-  reminisce: "claude-sonnet-5",
+  reminisce: "claude-sonnet-5-5",
 } as const;
 
-// Anthropic's published per-token pricing for Haiku 4.5, used only to show
-// Matt a rough cost estimate after each batch.
-const HAIKU_PRICE_PER_TOKEN = {
-  input: 1 / 1_000_000,
-  output: 5 / 1_000_000,
+// Anthropic's published per-token pricing for the analysis model, used only to
+// show Matt a rough cost estimate after each batch. Keyed by the model name so
+// that changing MODELS.analysis without updating its price is a type error.
+const ANALYSIS_PRICE_PER_TOKEN: Record<(typeof MODELS)["analysis"], { input: number; output: number }> = {
+  "claude-haiku-4-5": { input: 1 / 1_000_000, output: 5 / 1_000_000 },
 };
 
 const client = new Anthropic();
 
-// The app's owner, as Apple Photos names him in People tags. Descriptions
-// address him as "you" instead of naming him in the third person.
-const OWNER_NAME = "Matt Gaudet";
+// The app's owner, as Apple Photos names them in People tags. Descriptions
+// address the owner as "you" instead of naming them in the third person.
+// Set LORETREE_OWNER_NAME in .env.local to change it.
+const OWNER_NAME = process.env.LORETREE_OWNER_NAME?.trim() || "Matt Gaudet";
 
 const analysisResultSchema = z.object({
   description: z.string().min(1),
@@ -66,6 +67,7 @@ export interface PhotoContext {
   eventName: string | null;
   appleLabels: string[];
   takenAt: string | null;
+  appleCaption: string | null;
 }
 
 function buildAnalysisPrompt(context: PhotoContext): string {
@@ -77,6 +79,7 @@ function buildAnalysisPrompt(context: PhotoContext): string {
     includesOwner ? `This photo also includes the app's owner, ${OWNER_NAME}, who you are writing this description for.` : null,
     context.place ? `Place: ${context.place}.` : null,
     context.takenAt ? `Taken: ${context.takenAt}.` : null,
+    context.appleCaption ? `The owner wrote this caption himself in Apple Photos, so treat it as true and keep its meaning: "${context.appleCaption}".` : null,
     context.eventName ? `Apple's automatic event name: "${context.eventName}".` : null,
     context.appleLabels.length > 0 ? `Apple's scene labels: ${context.appleLabels.join(", ")}.` : null,
   ]
@@ -152,8 +155,14 @@ export async function analyzePhoto(photo: PhotoRow, context: PhotoContext): Prom
   };
 }
 
+// Rough cost of analyzing one photo (a 1024px image plus the prompt in, a short
+// JSON reply out), used to warn before a big batch. The real cost is shown
+// after each batch.
+export const ESTIMATED_COST_PER_PHOTO = 0.003;
+
 export function estimateCost(usage: AnalysisUsage): number {
-  return usage.inputTokens * HAIKU_PRICE_PER_TOKEN.input + usage.outputTokens * HAIKU_PRICE_PER_TOKEN.output;
+  const price = ANALYSIS_PRICE_PER_TOKEN[MODELS.analysis];
+  return usage.inputTokens * price.input + usage.outputTokens * price.output;
 }
 
 const CONTEXT_TAG_TYPES = ["person", "place", "event", "keyword"] as const;

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { addTagToPhotos } from "@/lib/queries/photo";
-
-const TAG_TYPES = ["person", "category", "place", "event", "keyword"] as const;
+import { TAG_TYPES } from "@/lib/tag-types";
 
 const postSchema = z.object({
   photoIds: z.array(z.string().min(1)).min(1),

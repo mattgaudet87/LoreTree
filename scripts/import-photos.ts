@@ -101,10 +101,10 @@ function linkTag(photoId: string, tagId: number) {
 const upsertPhoto = db.prepare(`
   INSERT INTO photos (
     id, user_id, taken_at, year, month, week_start, place_name, latitude, longitude,
-    is_favorite, apple_score, display_path, thumb_path, width, height, description, imported_at, images_updated_at
+    is_favorite, apple_score, display_path, thumb_path, width, height, description, apple_caption, imported_at, images_updated_at
   ) VALUES (
     @id, @user_id, @taken_at, @year, @month, @week_start, @place_name, @latitude, @longitude,
-    @is_favorite, @apple_score, @display_path, @thumb_path, @width, @height, @description, datetime('now'), datetime('now')
+    @is_favorite, @apple_score, @display_path, @thumb_path, @width, @height, @description, @description, datetime('now'), datetime('now')
   )
   ON CONFLICT(id) DO UPDATE SET
     taken_at = excluded.taken_at,
@@ -120,9 +120,11 @@ const upsertPhoto = db.prepare(`
     thumb_path = excluded.thumb_path,
     width = excluded.width,
     height = excluded.height,
+    apple_caption = COALESCE(excluded.apple_caption, photos.apple_caption),
     images_updated_at = datetime('now')
 `);
-// Note: description is only set on first insert (from Apple's own caption,
+// Note: apple_caption is refreshed on every import so the caption is never lost
+// once analysis replaces `description`. Description is only set on first insert (from Apple's own caption,
 // if any) and is otherwise left untouched on conflict, same as ai_status,
 // ai_error, analyzed_at, and is_profile — re-importing metadata should never
 // wipe out AI analysis, a user's profile pick, or a description AI already wrote.

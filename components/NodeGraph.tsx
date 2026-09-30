@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import type { NetworkNodeType } from "@/lib/types";
+import { MAP_TYPE_COLOR } from "@/lib/node-types";
 import type { NetworkNode } from "@/lib/queries/network";
 
 interface NodeGraphProps {
@@ -12,14 +12,6 @@ interface NodeGraphProps {
   onSelect: (node: NetworkNode) => void;
   onViewImages: () => void;
 }
-
-const TYPE_COLOR: Record<NetworkNodeType, string> = {
-  person: "var(--node-people)",
-  category: "var(--node-categories)",
-  place: "var(--node-places)",
-  event: "var(--node-events)",
-  year: "var(--node-years)",
-};
 
 // Names longer than this are shortened so they still fit inside a circle.
 const MAX_NAME_LENGTH = 9;
@@ -55,7 +47,7 @@ export default function NodeGraph({ centerLabel, centerCount, centerColor, nodes
               y1={50}
               x2={x}
               y2={y}
-              stroke={TYPE_COLOR[node.type]}
+              stroke={MAP_TYPE_COLOR[node.type]}
               strokeWidth={0.4}
               strokeOpacity={0.5}
             />
@@ -98,7 +90,7 @@ export default function NodeGraph({ centerLabel, centerCount, centerColor, nodes
               width: `${size}%`,
               aspectRatio: "1 / 1",
               transform: "translate(-50%, -50%)",
-              borderColor: TYPE_COLOR[node.type],
+              borderColor: MAP_TYPE_COLOR[node.type],
             }}
           >
             <span className="px-1 text-xs font-medium leading-tight text-text">{shortenName(node.label)}</span>

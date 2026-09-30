@@ -19,6 +19,28 @@ export type PathSegment =
 export type ValueFilter = { nodeType: NetworkNodeType; value: string };
 
 /**
+ * Values are percent-encoded inside a path so names containing commas or
+ * colons (e.g. the event "Kelowna, Aug 1 2026") can't be mistaken for the
+ * separators between segments.
+ */
+export function encodeSegmentValue(value: string): string {
+  return encodeURIComponent(value);
+}
+
+export function decodeSegmentValue(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/** Builds one "type:value" path segment with the value safely encoded. */
+export function valueSegment(nodeType: NetworkNodeType | string, value: string): string {
+  return `${nodeType}:${encodeSegmentValue(value)}`;
+}
+
+/**
  * Parses a network path like "group:person" or "person:Alex,place:Kelowna"
  * into ordered segments. Throws on an unrecognized node type so bad input
  * fails loudly instead of silently matching everything.
@@ -50,7 +72,7 @@ export function parsePath(path: string | null | undefined): PathSegment[] {
       if (!rest) {
         throw new Error(`Missing value in path segment "${segment}"`);
       }
-      return { kind: "value", nodeType: head, value: rest };
+      return { kind: "value", nodeType: head, value: decodeSegmentValue(rest) };
     });
 }
 

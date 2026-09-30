@@ -2,25 +2,25 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TouchEvent as ReactTouchEvent } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import PhotoCard, { type ImageFitMode } from "@/components/PhotoCard";
+import PhotoCard from "@/components/PhotoCard";
+import ImageModeToggle from "@/components/ImageModeToggle";
 import DetailPanel from "@/components/DetailPanel";
 import type { PhotoWithTags } from "@/lib/types";
 import { photoImageUrl } from "@/lib/image-url";
-import { formatWeekLabel } from "@/lib/queries/date-utils";
-import { loadImageMode, saveImageMode } from "@/lib/image-mode";
+import { decodeSegmentValue } from "@/lib/queries/filters";
+import { useImageMode } from "@/lib/use-image-mode";
 
-function filterLabel(filter: string | null, year: string | null, week: string | null, ids: string | null): string | null {
+function filterLabel(filter: string | null, year: string | null, ids: string | null): string | null {
   if (filter) {
     return filter
       .split(",")
-      .map((segment) => segment.split(":")[1] ?? segment)
+      .map((segment) => decodeSegmentValue(segment.split(":")[1] ?? segment))
       .filter(Boolean)
       .join(" > ");
   }
-  if (year && week) return `${year} > ${formatWeekLabel(week)}`;
   if (year) return year;
-  if (week) return formatWeekLabel(week);
   if (ids) return "Filtered photos";
   return null;
 }
@@ -30,7 +30,6 @@ export default function FeedClient() {
   const searchParams = useSearchParams();
   const filter = searchParams.get("filter");
   const year = searchParams.get("year");
-  const week = searchParams.get("week");
   const start = searchParams.get("start");
   const ids = searchParams.get("ids");
   const back = searchParams.get("back");
@@ -41,16 +40,7 @@ export default function FeedClient() {
   const [error, setError] = useState<string | null>(null);
   // "fit" shows the whole photo, in its original orientation, letterboxed on
   // black. That's the default so nothing gets cropped unless Matt asks for it.
-  const [imageMode, setImageMode] = useState<ImageFitMode>("fit");
-
-  useEffect(() => {
-    setImageMode(loadImageMode());
-  }, []);
-
-  function selectImageMode(mode: ImageFitMode) {
-    setImageMode(mode);
-    saveImageMode(mode);
-  }
+  const [imageMode, selectImageMode] = useImageMode();
 
   useEffect(() => {
     let cancelled = false;
@@ -61,7 +51,6 @@ export default function FeedClient() {
     const params = new URLSearchParams();
     if (filter) params.set("path", filter);
     if (year) params.set("year", year);
-    if (week) params.set("week", week);
     if (ids) params.set("ids", ids);
     params.set("limit", "200");
 
@@ -83,7 +72,7 @@ export default function FeedClient() {
     return () => {
       cancelled = true;
     };
-  }, [filter, year, week, start, ids]);
+  }, [filter, year, start, ids]);
 
   // Preload the neighboring photos so next/previous feels instant.
   useEffect(() => {
@@ -128,8 +117,8 @@ export default function FeedClient() {
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
-      if (e.key === "ArrowDown") withCooldown(goNext);
-      if (e.key === "ArrowUp") withCooldown(goPrev);
+      if (e.key === "ArrowDown" || e.key === "ArrowRight") withCooldown(goNext);
+      if (e.key === "ArrowUp" || e.key === "ArrowLeft") withCooldown(goPrev);
     }
     window.addEventListener("wheel", onWheel, { passive: true });
     window.addEventListener("keydown", onKey);
@@ -154,7 +143,7 @@ export default function FeedClient() {
     router.push(back ? decodeURIComponent(back) : "/lore");
   }
 
-  const label = filterLabel(filter, year, week, ids);
+  const label = filterLabel(filter, year, ids);
   const currentPhoto = photos?.[index] ?? null;
 
   function updatePhoto(updated: PhotoWithTags) {
@@ -181,22 +170,11 @@ export default function FeedClient() {
         </div>
       )}
 
-      <div className="absolute bottom-4 left-4 z-10">
-        <div className="flex overflow-hidden rounded-full border border-border bg-surface/80 text-xs backdrop-blur">
-          {(["fit", "zoom"] as ImageFitMode[]).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => selectImageMode(mode)}
-              aria-pressed={imageMode === mode}
-              className={`px-3 py-1.5 font-medium capitalize transition-colors ${
-                imageMode === mode ? "bg-accent text-bg" : "text-text-muted"
-              }`}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
-      </div>
+      <ImageModeToggle
+        mode={imageMode}
+        onChange={selectImageMode}
+        className="bottom-28 left-4 border-border bg-surface/80 md:bottom-4"
+      />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-4 pt-4">
         {label && (
@@ -221,7 +199,16 @@ export default function FeedClient() {
 
       {!error && photos && photos.length === 0 && (
         <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-          <p className="text-sm text-text-muted">No photos here yet.</p>
+          {label ? (
+            <p className="text-sm text-text-muted">No photos match this filter. Use the × at the top to clear it.</p>
+          ) : (
+            <>
+              <p className="text-sm text-text-muted">No photos yet.</p>
+              <Link href="/add-lore/photos" className="text-sm text-accent underline">
+                Add photos from Apple Photos
+              </Link>
+            </>
+          )}
         </div>
       )}
 

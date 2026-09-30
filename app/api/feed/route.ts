@@ -6,20 +6,18 @@ export async function GET(request: NextRequest) {
   const path = searchParams.get("path");
   const yearParam = searchParams.get("year");
   const monthParam = searchParams.get("month");
-  const week = searchParams.get("week");
   const idsParam = searchParams.get("ids");
   const limitParam = searchParams.get("limit");
 
   try {
-    const photos = getFeed({
+    const { photos, total } = getFeed({
       path,
       year: yearParam ? Number(yearParam) : null,
       month: monthParam ? Number(monthParam) : null,
-      week,
       ids: idsParam ? idsParam.split(",").filter(Boolean) : null,
       limit: limitParam ? Number(limitParam) : undefined,
     });
-    return NextResponse.json({ photos });
+    return NextResponse.json({ photos, total });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Invalid request" },

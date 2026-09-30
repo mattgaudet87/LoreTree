@@ -1,161 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import NodeGraph from "@/components/NodeGraph";
 import { parsePath, type PathSegment } from "@/lib/queries/filters";
-import type { NetworkNode, CenterNode } from "@/lib/queries/network";
-import type { NetworkNodeType, PhotoWithTags, TagType } from "@/lib/types";
-import { ADDABLE_TAG_TYPES } from "@/lib/tag-types";
-import { photoImageUrl } from "@/lib/image-url";
-import type { YearTagSummary, MonthTagSummary, TimelineStartType } from "@/lib/queries/timeline";
+import type { NetworkNode } from "@/lib/queries/network";
+import type { PhotoWithTags } from "@/lib/types";
+import { MAP_TYPES, MAP_TYPE_COLOR } from "@/lib/node-types";
+import type { YearTagSummary, MonthTagSummary } from "@/lib/queries/timeline";
 import type { SearchResult } from "@/lib/queries/search";
+import LorePhotoGrid from "./LorePhotoGrid";
+import LoreSearchResults from "./LoreSearchResults";
+import LoreTimeline from "./LoreTimeline";
+import LoreToolbar from "./LoreToolbar";
+import { BackButton } from "./lore-ui";
+import {
+  GRID_LIMIT,
+  segmentsToPath,
+  type GridState,
+  type NetworkData,
+  type SetParams,
+  type StartType,
+  type View,
+} from "./lore-shared";
+import { useSavedFilters, type SavedFilter } from "./use-saved-filters";
 
-const FACET_LABELS: Record<TagType, string> = {
-  person: "People",
-  place: "Places",
-  event: "Events",
-  category: "Categories",
-  keyword: "Details",
-};
-
-const SAVED_FILTERS_KEY = "loretree:saved-filters";
-
-type View = "map" | "timeline";
-type StartType = TimelineStartType;
-
-const VIEW_OPTIONS: { value: View; label: string }[] = [
-  { value: "map", label: "Map" },
-  { value: "timeline", label: "Timeline" },
-];
-
-// The map drills through these four in cascading order; "category" isn't
-// part of the People/Place/Event/Date taxonomy the map is built around.
-const MAP_TYPES: NetworkNodeType[] = ["person", "place", "event", "year"];
-
-const MAP_TYPE_LABEL: Record<NetworkNodeType, string> = {
-  person: "People",
-  place: "Place",
-  event: "Event",
-  year: "Date",
-  category: "Categories",
-};
-
-const MAP_TYPE_DOT: Record<NetworkNodeType, string> = {
-  person: "bg-node-people",
-  place: "bg-node-places",
-  event: "bg-node-events",
-  year: "bg-node-years",
-  category: "bg-node-categories",
-};
-
-const MAP_TYPE_COLOR: Record<NetworkNodeType, string> = {
-  person: "var(--node-people)",
-  place: "var(--node-places)",
-  event: "var(--node-events)",
-  year: "var(--node-years)",
-  category: "var(--node-categories)",
-};
-
-const TIMELINE_START_OPTIONS: { value: StartType; label: string; dot: string }[] = [
-  { value: "person", label: "People", dot: "bg-node-people" },
-  { value: "place", label: "Place", dot: "bg-node-places" },
-  { value: "event", label: "Event", dot: "bg-node-events" },
-];
-
-const START_DOT: Record<StartType, string> = {
-  person: "bg-node-people",
-  place: "bg-node-places",
-  event: "bg-node-events",
-};
-
-interface SavedFilter {
-  id: string;
-  label: string;
-  view: View;
-  path: string;
-  show: string;
-  start: StartType;
-  year: string;
-  query: string;
-}
-
-function segmentToString(segment: PathSegment): string {
-  return segment.kind === "group" ? `group:${segment.nodeType}` : `${segment.nodeType}:${segment.value}`;
-}
-
-function segmentsToPath(segments: PathSegment[]): string {
-  return segments.map(segmentToString).join(",");
-}
-
-async function fetchTagSuggestions(type: TagType, query: string): Promise<string[]> {
-  if (!query.trim()) return [];
-  try {
-    const res = await fetch(`/api/tags/suggest?type=${type}&q=${encodeURIComponent(query)}`);
-    if (!res.ok) return [];
-    const { suggestions } = (await res.json()) as { suggestions: string[] };
-    return suggestions;
-  } catch {
-    return [];
-  }
-}
-
-interface NetworkData {
-  total: number;
-  center: CenterNode | null;
-  effectiveType: NetworkNodeType | null;
-  nodes: NetworkNode[];
-}
-
-interface GridState {
-  photos: PhotoWithTags[];
-  backHref: string;
-  onClose: () => void;
-}
-
-function BackButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Back"
-      className="mb-2 flex h-8 w-8 shrink-0 items-center justify-center self-start rounded-full border border-border bg-surface-2 text-text-muted transition-colors hover:text-text"
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-        <path d="M15 18l-6-6 6-6" />
-      </svg>
-    </button>
-  );
-}
-
-function ShowToggle({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: string; label: string; dot: string }[];
-  value: string | null;
-  onChange: (value: string) => void;
-}) {
-  if (options.length === 0) return null;
-  return (
-    <div className="inline-flex flex-wrap gap-1 rounded-lg border border-border bg-surface-2 p-1">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-            value === opt.value ? "bg-accent text-bg" : "text-text-muted hover:text-text"
-          }`}
-        >
-          <span className={`h-2 w-2 rounded-full ${opt.dot}`} />
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
-}
+// Search runs once typing pauses, not on every keystroke, since each search
+// scans the whole library on the server.
+const SEARCH_DELAY_MS = 300;
 
 export default function LoreClient() {
   const router = useRouter();
@@ -165,33 +38,23 @@ export default function LoreClient() {
   const path = searchParams.get("path") ?? "";
   const show = searchParams.get("show");
   const yearParam = searchParams.get("year");
+  const searchParam = searchParams.get("search");
 
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(searchParam === "1");
   const [query, setQuery] = useState("");
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [data, setData] = useState<NetworkData | null>(null);
   const [timelineYears, setTimelineYears] = useState<YearTagSummary[] | null>(null);
   const [timelineMonths, setTimelineMonths] = useState<MonthTagSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
   const [grid, setGrid] = useState<GridState | null>(null);
   const [gridLoading, setGridLoading] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkTagType, setBulkTagType] = useState<TagType>("person");
-  const [bulkTagName, setBulkTagName] = useState("");
-  const [bulkSuggestions, setBulkSuggestions] = useState<string[]>([]);
-  const [bulkBusy, setBulkBusy] = useState(false);
-  const [bulkError, setBulkError] = useState<string | null>(null);
-  const [bulkDone, setBulkDone] = useState<string | null>(null);
+  const { savedFilters, saveFilter, deleteFilter } = useSavedFilters();
 
+  // The Search tab links here with ?search=1 so the search box opens straight away.
   useEffect(() => {
-    try {
-      const storedFilters = window.localStorage.getItem(SAVED_FILTERS_KEY);
-      if (storedFilters) setSavedFilters(JSON.parse(storedFilters) as SavedFilter[]);
-    } catch {
-      // Ignore — saved filters just start empty.
-    }
-  }, []);
+    if (searchParam === "1") setSearchOpen(true);
+  }, [searchParam]);
 
   const segments = useMemo(() => {
     try {
@@ -206,8 +69,8 @@ export default function LoreClient() {
   const usedTypes = useMemo(() => new Set(segments.map((s) => s.nodeType)), [segments]);
   const candidateTypes = useMemo(() => MAP_TYPES.filter((t) => !usedTypes.has(t)), [usedTypes]);
 
-  const setParams = useCallback(
-    (updates: Record<string, string | null>) => {
+  const setParams: SetParams = useCallback(
+    (updates) => {
       const next = new URLSearchParams(searchParams.toString());
       for (const [key, value] of Object.entries(updates)) {
         if (value === null || value === "") next.delete(key);
@@ -218,6 +81,19 @@ export default function LoreClient() {
     },
     [router, searchParams]
   );
+
+  // Bumped after a bulk tag so the Map counts / Timeline chips behind the
+  // grid reload and show the new tags.
+  const [dataVersion, setDataVersion] = useState(0);
+
+  // The map effect below needs the latest openGrid/mapBack without re-running
+  // every time they're re-created, so it reads them through refs.
+  const openGridRef = useRef(openGrid);
+  const mapBackRef = useRef(mapBack);
+  const gridOpenRef = useRef(false);
+  openGridRef.current = openGrid;
+  mapBackRef.current = mapBack;
+  gridOpenRef.current = grid !== null;
 
   useEffect(() => {
     if (view !== "map") return;
@@ -244,8 +120,8 @@ export default function LoreClient() {
         // straight to the grid instead. Checked here, off the fetch result
         // itself (not a separate effect keyed on `data`), so it can never
         // act on a stale result from the previous path.
-        if (result.nodes.length === 0 && result.total > 0) {
-          openGrid({ path }, mapBack);
+        if (result.nodes.length === 0 && result.total > 0 && !gridOpenRef.current) {
+          openGridRef.current({ path }, () => mapBackRef.current());
         }
       })
       .catch((err) => {
@@ -255,7 +131,7 @@ export default function LoreClient() {
     return () => {
       cancelled = true;
     };
-  }, [view, path, show]);
+  }, [view, path, show, dataVersion]);
 
   useEffect(() => {
     if (view !== "timeline") return;
@@ -287,7 +163,7 @@ export default function LoreClient() {
     return () => {
       cancelled = true;
     };
-  }, [view, start, yearParam]);
+  }, [view, start, yearParam, dataVersion]);
 
   const trimmedQuery = query.trim();
 
@@ -297,25 +173,27 @@ export default function LoreClient() {
       return;
     }
     let cancelled = false;
+    const timer = setTimeout(runSearch, SEARCH_DELAY_MS);
 
-    fetch(`/api/search?q=${encodeURIComponent(trimmedQuery)}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Search failed");
-        return res.json();
-      })
-      .then((result: SearchResult) => {
-        if (!cancelled) setSearchResult(result);
-      })
-      .catch(() => {
-        if (!cancelled) setSearchResult(null);
-      });
+    function runSearch() {
+      fetch(`/api/search?q=${encodeURIComponent(trimmedQuery)}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("Search failed");
+          return res.json();
+        })
+        .then((result: SearchResult) => {
+          if (!cancelled) setSearchResult(result);
+        })
+        .catch(() => {
+          if (!cancelled) setSearchResult(null);
+        });
+    }
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [trimmedQuery]);
-
-  const searchIdsParam = searchResult ? searchResult.photos.map((p) => p.id).join(",") : "";
 
   function selectNode(node: NetworkNode) {
     const nextSegments = [...segments, { kind: "value" as const, nodeType: node.type, value: node.value }];
@@ -332,7 +210,7 @@ export default function LoreClient() {
 
   async function openGrid(opts: { path?: string; year?: number; month?: number }, onClose?: () => void) {
     setGridLoading(true);
-    const params = new URLSearchParams({ limit: "200" });
+    const params = new URLSearchParams({ limit: String(GRID_LIMIT) });
     if (opts.path) params.set("path", opts.path);
     if (opts.year !== undefined) params.set("year", String(opts.year));
     if (opts.month !== undefined) params.set("month", String(opts.month));
@@ -340,13 +218,11 @@ export default function LoreClient() {
     try {
       const res = await fetch(`/api/feed?${params.toString()}`);
       if (!res.ok) throw new Error("Could not load photos");
-      const { photos: loaded } = (await res.json()) as { photos: PhotoWithTags[] };
-      setSelectedIds(new Set());
-      setBulkTagName("");
-      setBulkError(null);
-      setBulkDone(null);
+      const { photos: loaded, total } = (await res.json()) as { photos: PhotoWithTags[]; total: number };
       setGrid({
+        id: Date.now(),
         photos: loaded,
+        total,
         backHref: `/lore?${searchParams.toString()}`,
         onClose: onClose ?? (() => setGrid(null)),
       });
@@ -357,57 +233,8 @@ export default function LoreClient() {
     }
   }
 
-  function toggleSelected(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleSelectAll() {
-    if (!grid) return;
-    setSelectedIds((prev) =>
-      prev.size === grid.photos.length ? new Set() : new Set(grid.photos.map((p) => p.id))
-    );
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchTagSuggestions(bulkTagType, bulkTagName).then((s) => {
-      if (!cancelled) setBulkSuggestions(s.filter((name) => name.toLowerCase() !== bulkTagName.trim().toLowerCase()));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [bulkTagType, bulkTagName]);
-
-  async function addBulkTag(overrideName?: string) {
-    const name = (overrideName ?? bulkTagName).trim();
-    if (!name || selectedIds.size === 0) return;
-    setBulkBusy(true);
-    setBulkError(null);
-    setBulkDone(null);
-    try {
-      const res = await fetch(`/api/tags/bulk`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photoIds: Array.from(selectedIds), name, type: bulkTagType }),
-      });
-      if (!res.ok) throw new Error("Could not add tag");
-      setBulkDone(`Added "${name}" to ${selectedIds.size} photo${selectedIds.size === 1 ? "" : "s"}.`);
-      setBulkTagName("");
-      setBulkSuggestions([]);
-    } catch (err) {
-      setBulkError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setBulkBusy(false);
-    }
-  }
-
   // One level up in the current path/period — used by the top-left back
-  // button, and to back a dead-end map drill (see the effect below) out to
+  // button, and to back a dead-end map drill (see the effect above) out to
   // the level that had real choices instead of reopening the same dead end.
   function mapBack() {
     if (segments.length === 0) return;
@@ -427,44 +254,10 @@ export default function LoreClient() {
     setParams({ path: null, show: null, year: null });
   }
 
-  function saveFilter() {
-    const label = window.prompt("Name this filter");
-    if (!label || !label.trim()) return;
-    const next: SavedFilter[] = [
-      ...savedFilters,
-      {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        label: label.trim(),
-        view,
-        path,
-        show: show ?? "",
-        start,
-        year: yearParam ?? "",
-        query: trimmedQuery,
-      },
-    ];
-    setSavedFilters(next);
-    try {
-      window.localStorage.setItem(SAVED_FILTERS_KEY, JSON.stringify(next));
-    } catch {
-      // Ignore — the save just won't persist across visits.
-    }
-  }
-
   function applyFilter(sf: SavedFilter) {
     setQuery(sf.query);
     setSearchOpen(!!sf.query);
     setParams({ view: sf.view, path: sf.path || null, show: sf.show || null, start: sf.start, year: sf.year || null });
-  }
-
-  function deleteFilter(id: string) {
-    const next = savedFilters.filter((sf) => sf.id !== id);
-    setSavedFilters(next);
-    try {
-      window.localStorage.setItem(SAVED_FILTERS_KEY, JSON.stringify(next));
-    } catch {
-      // Ignore.
-    }
   }
 
   const centerLabel = data?.center ? data.center.label : "All";
@@ -473,181 +266,30 @@ export default function LoreClient() {
 
   return (
     <div className="flex min-h-[calc(100dvh-5rem)] flex-col">
-      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-2 px-4 pb-2 pr-16 pt-4 md:pr-4">
-        <div className="flex flex-wrap items-end justify-center gap-5">
-          <div>
-            <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">View</p>
-            <select
-              value={view}
-              onChange={(e) => setParams({ view: e.target.value, path: null, show: null, year: null })}
-              className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-sm text-text"
-            >
-              {VIEW_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+      <LoreToolbar
+        view={view}
+        start={start}
+        path={path}
+        show={show}
+        yearParam={yearParam}
+        candidateTypes={candidateTypes}
+        effectiveType={data?.effectiveType ?? null}
+        crumbs={crumbs}
+        setParams={setParams}
+        searchOpen={searchOpen}
+        onToggleSearch={() => setSearchOpen((v) => !v)}
+        query={query}
+        onQueryChange={setQuery}
+        savedFilters={savedFilters}
+        onSaveFilter={() =>
+          saveFilter({ view, path, show: show ?? "", start, year: yearParam ?? "", query: trimmedQuery })
+        }
+        onApplyFilter={applyFilter}
+        onDeleteFilter={deleteFilter}
+        onClearFilters={clearFilters}
+      />
 
-          {view === "timeline" && (
-            <div>
-              <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">Show</p>
-              <ShowToggle
-                options={TIMELINE_START_OPTIONS}
-                value={start}
-                onChange={(v) => setParams({ start: v })}
-              />
-            </div>
-          )}
-
-          {view === "map" && !trimmedQuery && candidateTypes.length > 0 && (
-            <div>
-              <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">Show</p>
-              <ShowToggle
-                options={candidateTypes.map((t) => ({ value: t, label: MAP_TYPE_LABEL[t], dot: MAP_TYPE_DOT[t] }))}
-                value={data?.effectiveType ?? show}
-                onChange={(v) => setParams({ show: v })}
-              />
-            </div>
-          )}
-
-          <div className="flex items-end gap-2">
-            <button
-              onClick={clearFilters}
-              className="rounded-full border border-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:text-text"
-            >
-              Clear filters
-            </button>
-            <button
-              onClick={saveFilter}
-              className="rounded-full border border-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:text-text"
-            >
-              Save filter
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setSearchOpen((v) => !v)}
-            aria-label="Search"
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface-2 text-text-muted transition-colors hover:text-text"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-          </button>
-        </div>
-
-        {savedFilters.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {savedFilters.map((sf) => (
-              <span
-                key={sf.id}
-                className="flex items-center gap-1 rounded-full border border-border bg-surface-2 pl-2.5 pr-1 py-1 text-xs text-text"
-              >
-                <button onClick={() => applyFilter(sf)}>{sf.label}</button>
-                <button
-                  onClick={() => deleteFilter(sf.id)}
-                  aria-label={`Delete ${sf.label}`}
-                  className="px-1 text-text-muted hover:text-text"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-
-        {searchOpen && (
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            autoFocus
-            placeholder="Try fall mountain hike…"
-            className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-text-muted"
-          />
-        )}
-
-        {!trimmedQuery && view === "map" && (
-          <div className="flex flex-wrap items-center justify-center gap-1 text-sm">
-            {crumbs.map((crumb, i) => {
-              const isCurrent = i === crumbs.length - 1;
-              return (
-                <span key={crumb.path ?? "root"} className="flex items-center gap-1">
-                  {i > 0 && <span className="text-text-muted">/</span>}
-                  <button
-                    onClick={() => setParams({ path: crumb.path, show: null })}
-                    disabled={isCurrent}
-                    className={isCurrent ? "font-semibold text-text" : "text-text-muted hover:text-text"}
-                  >
-                    {crumb.label}
-                  </button>
-                </span>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {trimmedQuery && (
-        <div className="flex flex-1 flex-col px-4 pb-4">
-          {!searchResult && <p className="px-2 py-8 text-center text-sm text-text-muted">Searching…</p>}
-
-          {searchResult && searchResult.total === 0 && (
-            <p className="px-2 py-8 text-center text-sm text-text-muted">
-              Nothing matches &ldquo;{trimmedQuery}&rdquo;.
-            </p>
-          )}
-
-          {searchResult && searchResult.total > 0 && (
-            <>
-              {Object.entries(searchResult.facets).map(([type, values]) => (
-                <div key={type} className="mb-2">
-                  <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-text-muted">
-                    {FACET_LABELS[type as TagType]}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {values!.map((v) => (
-                      <a
-                        key={v.value}
-                        href={`/feed?ids=${encodeURIComponent(searchIdsParam)}&filter=${encodeURIComponent(`${type}:${v.value}`)}`}
-                        className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-text transition-colors hover:border-accent"
-                      >
-                        {v.value} <span className="text-text-muted">({v.count})</span>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-                {searchResult.photos.map((p) => (
-                  <a
-                    key={p.id}
-                    href={`/feed?ids=${encodeURIComponent(searchIdsParam)}&start=${p.id}`}
-                    className="relative block aspect-square overflow-hidden rounded-lg border border-border bg-surface-2"
-                  >
-                    {p.thumb_path && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={photoImageUrl(p, "thumb")} alt="" className="h-full w-full object-cover" />
-                    )}
-                  </a>
-                ))}
-              </div>
-
-              <a
-                href={`/feed?ids=${encodeURIComponent(searchIdsParam)}`}
-                className="banner-gradient mx-0 mt-4 rounded-2xl px-4 py-4 text-center text-sm font-medium text-white shadow-lg"
-              >
-                View {searchResult.total} photo{searchResult.total === 1 ? "" : "s"}
-              </a>
-            </>
-          )}
-        </div>
-      )}
+      {trimmedQuery && <LoreSearchResults query={trimmedQuery} result={searchResult} />}
 
       {!trimmedQuery && view === "map" && (
         <div className="relative flex flex-1 flex-col px-6 py-4">
@@ -679,239 +321,20 @@ export default function LoreClient() {
       )}
 
       {!trimmedQuery && view === "timeline" && (
-        <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-4 pb-4 pt-2">
-          {yearParam && <BackButton onClick={timelineBack} />}
-          {error && <p className="px-2 py-12 text-center text-sm text-text-muted">{error}</p>}
-
-          {!error && !yearParam && timelineYears && timelineYears.length === 0 && (
-            <p className="px-2 py-12 text-center text-sm text-text-muted">No photos yet.</p>
-          )}
-
-          {!error && !yearParam && timelineYears && timelineYears.length > 0 && (
-            <div className="flex flex-col">
-              {timelineYears.map(({ year, count, tags, hasMore }) => (
-                <div
-                  key={year}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setParams({ year: String(year) })}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") setParams({ year: String(year) });
-                  }}
-                  className="flex cursor-pointer flex-col gap-2 border-b border-border py-4 text-left"
-                >
-                  <div>
-                    <span className="text-3xl font-semibold text-text">{year}</span>
-                    <p className="text-xs text-text-muted">
-                      {count} photo{count === 1 ? "" : "s"}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {tags.map((t) => (
-                      <button
-                        key={t.value}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openGrid({ path: `${start}:${t.value}`, year });
-                        }}
-                        className="flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-text transition-colors hover:border-accent"
-                      >
-                        <span className={`h-2 w-2 rounded-full ${START_DOT[start]}`} />
-                        {t.value}
-                      </button>
-                    ))}
-                    {hasMore && (
-                      <span className="flex items-center rounded-full border border-border px-2.5 py-1 text-xs text-text-muted">
-                        +
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              <button
-                onClick={() => openGrid({})}
-                disabled={gridLoading}
-                className="banner-gradient mt-4 rounded-2xl px-4 py-4 text-center text-sm font-medium text-white shadow-lg disabled:opacity-60"
-              >
-                View {timelineYears.reduce((sum, y) => sum + y.count, 0)} photos
-              </button>
-            </div>
-          )}
-
-          {!error && yearParam && timelineMonths && timelineMonths.length === 0 && (
-            <p className="px-2 py-12 text-center text-sm text-text-muted">No photos in {yearParam}.</p>
-          )}
-
-          {!error && yearParam && timelineMonths && timelineMonths.length > 0 && (
-            <div className="flex flex-col">
-              {timelineMonths.map(({ month, name, count, tags, hasMore }) => (
-                <div
-                  key={month}
-                  role="button"
-                  tabIndex={gridLoading ? -1 : 0}
-                  onClick={() => !gridLoading && openGrid({ year: Number(yearParam), month })}
-                  onKeyDown={(e) => {
-                    if (!gridLoading && (e.key === "Enter" || e.key === " ")) openGrid({ year: Number(yearParam), month });
-                  }}
-                  className={`flex flex-col gap-2 border-b border-border py-4 text-left ${
-                    gridLoading ? "cursor-default opacity-60" : "cursor-pointer"
-                  }`}
-                >
-                  <div>
-                    <span className="text-lg font-medium text-text">{name}</span>
-                    <span className="ml-2 text-xs text-text-muted">
-                      {count} photo{count === 1 ? "" : "s"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {tags.map((t) => (
-                      <button
-                        key={t.value}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openGrid({ path: `${start}:${t.value}`, year: Number(yearParam), month });
-                        }}
-                        className="flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-text transition-colors hover:border-accent"
-                      >
-                        <span className={`h-2 w-2 rounded-full ${START_DOT[start]}`} />
-                        {t.value}
-                      </button>
-                    ))}
-                    {hasMore && (
-                      <span className="flex items-center rounded-full border border-border px-2.5 py-1 text-xs text-text-muted">
-                        +
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              <button
-                onClick={() => openGrid({ year: Number(yearParam) })}
-                disabled={gridLoading}
-                className="banner-gradient mt-4 rounded-2xl px-4 py-4 text-center text-sm font-medium text-white shadow-lg disabled:opacity-60"
-              >
-                View {timelineMonths.reduce((sum, m) => sum + m.count, 0)} photos
-              </button>
-            </div>
-          )}
-        </div>
+        <LoreTimeline
+          start={start}
+          yearParam={yearParam}
+          years={timelineYears}
+          months={timelineMonths}
+          error={error}
+          gridLoading={gridLoading}
+          openGrid={openGrid}
+          setParams={setParams}
+          onBack={timelineBack}
+        />
       )}
 
-      {grid && (
-        <div className="fixed inset-0 z-30 flex flex-col bg-bg md:left-20">
-          <div className="flex items-center gap-3 px-4 py-4">
-            <button
-              onClick={() => grid.onClose()}
-              aria-label="Close"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface-2 text-text-muted hover:text-text"
-            >
-              ×
-            </button>
-            <button
-              onClick={toggleSelectAll}
-              className="rounded-full border border-border px-2.5 py-1 text-xs font-medium text-text-muted transition-colors hover:text-text"
-            >
-              {selectedIds.size === grid.photos.length ? "Deselect all" : "Select all"}
-            </button>
-            <p className="text-sm font-medium text-text">
-              {selectedIds.size > 0
-                ? `${selectedIds.size} selected`
-                : `${grid.photos.length} photo${grid.photos.length === 1 ? "" : "s"}`}
-            </p>
-          </div>
-          <div className="grid flex-1 auto-rows-min grid-cols-3 gap-2 overflow-y-auto px-4 pb-4 sm:grid-cols-4 md:grid-cols-6">
-            {grid.photos.map((p) => {
-              const selected = selectedIds.has(p.id);
-              return (
-                <a
-                  key={p.id}
-                  href={`/feed?ids=${encodeURIComponent(grid.photos.map((gp) => gp.id).join(","))}&start=${p.id}&back=${encodeURIComponent(grid.backHref)}`}
-                  className="relative block aspect-square overflow-hidden rounded-lg border border-border bg-surface-2"
-                >
-                  {p.thumb_path && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={photoImageUrl(p, "thumb")} alt="" className="h-full w-full object-cover" />
-                  )}
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      toggleSelected(p.id);
-                    }}
-                    aria-label={selected ? "Deselect photo" : "Select photo"}
-                    aria-pressed={selected}
-                    className={`absolute left-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-md border-2 backdrop-blur ${
-                      selected ? "border-accent bg-accent text-bg" : "border-white/70 bg-black/30 text-transparent"
-                    }`}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
-                  </button>
-                </a>
-              );
-            })}
-          </div>
-
-          {selectedIds.size > 0 && (
-            <div
-              className="flex flex-col gap-2 border-t border-border bg-surface px-4 py-3"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {bulkError && <p className="text-xs text-node-events">{bulkError}</p>}
-              {bulkDone && <p className="text-xs text-accent">{bulkDone}</p>}
-              <div className="relative flex gap-2">
-                <select
-                  value={bulkTagType}
-                  onChange={(e) => setBulkTagType(e.target.value as TagType)}
-                  className="rounded-lg border border-border bg-surface-2 px-2 text-xs text-text"
-                >
-                  {ADDABLE_TAG_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={bulkTagName}
-                  onChange={(e) => setBulkTagName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addBulkTag()}
-                  placeholder={`Add a tag to ${selectedIds.size} photo${selectedIds.size === 1 ? "" : "s"}`}
-                  className="flex-1 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm text-text placeholder:text-text-muted"
-                />
-                <button
-                  onClick={() => addBulkTag()}
-                  disabled={bulkBusy || !bulkTagName.trim()}
-                  className="rounded-lg bg-accent px-3 text-sm font-medium text-bg disabled:opacity-40"
-                >
-                  Add
-                </button>
-                <button
-                  onClick={() => setSelectedIds(new Set())}
-                  className="rounded-lg border border-border px-3 text-sm text-text-muted"
-                >
-                  Clear
-                </button>
-              </div>
-              {bulkSuggestions.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-surface-2 p-2">
-                  {bulkSuggestions.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => addBulkTag(s)}
-                      className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-text hover:border-accent"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+      {grid && <LorePhotoGrid key={grid.id} grid={grid} onTagged={() => setDataVersion((v) => v + 1)} />}
     </div>
   );
 }

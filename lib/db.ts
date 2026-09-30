@@ -120,6 +120,14 @@ if (!photoColumns.some((c) => c.name === "images_updated_at")) {
   db.exec(`ALTER TABLE photos ADD COLUMN images_updated_at TEXT`);
 }
 
+// Apple's own hand-typed caption, kept separately so AI analysis (which
+// replaces `description`) never loses it.
+if (!photoColumns.some((c) => c.name === "apple_caption")) {
+  db.exec(`ALTER TABLE photos ADD COLUMN apple_caption TEXT`);
+  // Photos not yet analyzed still hold their Apple caption in `description`.
+  db.exec(`UPDATE photos SET apple_caption = description WHERE ai_status != 'done' AND description IS NOT NULL`);
+}
+
 // Tracks which tags a context note added, as a JSON array of tag ids, so
 // Undo can remove exactly those tags without touching ones added elsewhere.
 const contextNoteColumns = db.prepare(`PRAGMA table_info(context_notes)`).all() as { name: string }[];

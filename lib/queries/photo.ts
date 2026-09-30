@@ -1,4 +1,5 @@
 import { db, DEFAULT_USER_ID } from "@/lib/db";
+import { isCategory } from "@/lib/categories";
 import type { PhotoRow, PhotoWithTags, Tag, TagSource, TagType } from "@/lib/types";
 
 export function toPhotoWithTags(row: PhotoRow, tags: Tag[]): PhotoWithTags {
@@ -87,6 +88,18 @@ export function updatePhoto(id: string, patch: PhotoPatch, userId = DEFAULT_USER
   return getPhotoById(id, userId);
 }
 
+/** Categories come only from the fixed list in lib/categories.ts, never free-typed. */
+function assertAllowedTag(name: string, type: TagType): void {
+  if (type === "category" && !isCategory(name)) {
+    throw new Error("Categories must come from the fixed list");
+  }
+}
+
+/** Removes tags no photo uses any more, so they stop appearing in suggestions. */
+function deleteOrphanTags(userId: string): void {
+  db.prepare(`DELETE FROM tags WHERE user_id = ? AND id NOT IN (SELECT tag_id FROM photo_tags)`).run(userId);
+}
+
 function getOrCreateTag(name: string, type: TagType, userId: string): number {
   const existing = db
     .prepare(`SELECT id FROM tags WHERE user_id = ? AND type = ? AND name = ?`)
@@ -110,6 +123,7 @@ export function addPhotoTag(
   if (!trimmed) {
     throw new Error("Tag name cannot be empty");
   }
+  assertAllowedTag(trimmed, type);
   const tagId = getOrCreateTag(trimmed, type, userId);
   db.prepare(
     `INSERT OR IGNORE INTO photo_tags (photo_id, tag_id, user_id, source) VALUES (?, ?, ?, ?)`
@@ -128,6 +142,7 @@ export function addTagToPhotos(
   if (!trimmed) {
     throw new Error("Tag name cannot be empty");
   }
+  assertAllowedTag(trimmed, type);
   const tagId = getOrCreateTag(trimmed, type, userId);
   const insert = db.prepare(
     `INSERT OR IGNORE INTO photo_tags (photo_id, tag_id, user_id, source) VALUES (?, ?, ?, 'user')`
@@ -145,6 +160,7 @@ export function removePhotoTag(photoId: string, tagId: number, userId = DEFAULT_
     tagId,
     userId
   );
+  deleteOrphanTags(userId);
   return getTagsForPhoto(photoId, userId);
 }
 
@@ -178,6 +194,7 @@ export function editPhotoTag(
   }
 
   const targetType = newType ?? tag.type;
+  assertAllowedTag(trimmed, targetType);
 
   if (scope === "all") {
     if (tag.name !== trimmed || tag.type !== targetType) {
@@ -213,6 +230,7 @@ export function editPhotoTag(
       db.prepare(
         `INSERT OR IGNORE INTO photo_tags (photo_id, tag_id, user_id, source) VALUES (?, ?, ?, 'user')`
       ).run(photoId, newTagId, userId);
+      deleteOrphanTags(userId);
     }
   }
 
@@ -224,40 +242,34 @@ export function suggestTags(query: string, type: TagType, userId = DEFAULT_USER_
   if (!q) return [];
   const rows = db
     .prepare(
-      `SELECT name FROM tags WHERE user_id = ? AND type = ? AND name LIKE ? COLLATE NOCASE ORDER BY name ASC LIMIT ?`
+      `SELECT name FROM tags t WHERE t.user_id = ? AND t.type = ? AND t.name LIKE ? COLLATE NOCASE
+       AND EXISTS (SELECT 1 FROM photo_tags pt WHERE pt.tag_id = t.id)
+       ORDER BY t.name ASC LIMIT ?`
     )
     .all(userId, type, `%${q}%`, limit) as { name: string }[];
   return rows.map((r) => r.name);
 }
 
 /**
- * Renames a photo's event tag to a better AI-suggested name, but only if
- * the event still has its automatic name (source "apple"). Never touches
- * an event Matt has renamed himself. If another event already has that
- * name, merges into it instead of violating the unique tag constraint.
+ * Gives one photo the AI's event name (the "what": Hike, Pickleball...).
+ * Only this photo is touched: Apple's automatic "Place, Date" event is
+ * shared by every photo from that day, so renaming it would rename them all.
+ * A photo with no event gets the AI event added; a photo with only Apple's
+ * automatic event has that link swapped for the AI one; an event Matt set
+ * himself (or an earlier AI one) is never replaced.
  */
-export function maybeRenameAutoEvent(photoId: string, newName: string, userId = DEFAULT_USER_ID): void {
-  const trimmed = newName.trim();
+export function applyAiEvent(photoId: string, eventName: string, userId = DEFAULT_USER_ID): void {
+  const trimmed = eventName.trim();
   if (!trimmed) return;
 
-  const eventTag = getTagsForPhoto(photoId, userId).find((t) => t.type === "event");
-  if (!eventTag || eventTag.source !== "apple" || eventTag.name === trimmed) return;
+  const eventTags = getTagsForPhoto(photoId, userId).filter((t) => t.type === "event");
+  if (eventTags.some((t) => t.source !== "apple")) return;
 
-  const existing = db
-    .prepare(`SELECT id FROM tags WHERE user_id = ? AND type = 'event' AND name = ? AND id != ?`)
-    .get(userId, trimmed, eventTag.id) as { id: number } | undefined;
-
-  if (existing) {
-    db.prepare(`UPDATE OR IGNORE photo_tags SET tag_id = ? WHERE tag_id = ? AND user_id = ?`).run(
-      existing.id,
-      eventTag.id,
-      userId
-    );
-    db.prepare(`DELETE FROM photo_tags WHERE tag_id = ? AND user_id = ?`).run(eventTag.id, userId);
-    db.prepare(`DELETE FROM tags WHERE id = ? AND user_id = ?`).run(eventTag.id, userId);
-  } else {
-    db.prepare(`UPDATE tags SET name = ? WHERE id = ? AND user_id = ?`).run(trimmed, eventTag.id, userId);
+  for (const tag of eventTags) {
+    db.prepare(`DELETE FROM photo_tags WHERE photo_id = ? AND tag_id = ? AND user_id = ?`).run(photoId, tag.id, userId);
   }
+  addPhotoTag(photoId, trimmed, "event", "ai", userId);
+  deleteOrphanTags(userId);
 }
 
 export interface ContextNote {
@@ -360,6 +372,7 @@ export function undoLastContextNote(photoId: string, userId = DEFAULT_USER_ID): 
     userId
   );
   db.prepare(`DELETE FROM context_notes WHERE id = ? AND user_id = ?`).run(note.id, userId);
+  deleteOrphanTags(userId);
 
   return getPhotoById(photoId, userId);
 }
