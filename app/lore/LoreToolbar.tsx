@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { MAP_TYPE_DOT, MAP_TYPE_LABEL } from "@/lib/node-types";
 import type { NetworkNodeType } from "@/lib/types";
 import { ShowToggle } from "./lore-ui";
@@ -25,7 +26,7 @@ interface LoreToolbarProps {
   query: string;
   onQueryChange: (query: string) => void;
   savedFilters: SavedFilter[];
-  onSaveFilter: () => void;
+  onSaveFilter: (label: string) => void;
   onApplyFilter: (filter: SavedFilter) => void;
   onDeleteFilter: (id: string) => void;
   onClearFilters: () => void;
@@ -53,6 +54,17 @@ export default function LoreToolbar({
   onClearFilters,
 }: LoreToolbarProps) {
   const trimmedQuery = query.trim();
+  // Naming a filter happens in a small box right here, not a browser pop-up.
+  const [naming, setNaming] = useState(false);
+  const [filterName, setFilterName] = useState("");
+
+  function saveNamedFilter() {
+    const label = filterName.trim();
+    if (!label) return;
+    onSaveFilter(label);
+    setNaming(false);
+    setFilterName("");
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-2 px-4 pb-2 pr-16 pt-4 md:pr-4">
@@ -102,12 +114,42 @@ export default function LoreToolbar({
               Clear filters
             </button>
           )}
-          <button
-            onClick={onSaveFilter}
-            className="rounded-full border border-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:text-text"
-          >
-            Save filter
-          </button>
+          {naming ? (
+            <div className="flex items-center gap-1">
+              <input
+                value={filterName}
+                onChange={(e) => setFilterName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveNamedFilter();
+                  if (e.key === "Escape") setNaming(false);
+                }}
+                autoFocus
+                placeholder="Filter name"
+                className="w-28 rounded-full border border-accent bg-surface-2 px-2.5 py-1 text-xs text-text placeholder:text-text-muted"
+              />
+              <button
+                onClick={saveNamedFilter}
+                disabled={!filterName.trim()}
+                className="rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-bg disabled:opacity-40"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setNaming(false)}
+                aria-label="Cancel"
+                className="px-1 text-xs text-text-muted hover:text-text"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setNaming(true)}
+              className="rounded-full border border-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:text-text"
+            >
+              Save filter
+            </button>
+          )}
         </div>
 
         <button

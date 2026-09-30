@@ -12,6 +12,8 @@ export function useContextNotes(photo: PhotoWithTags, onPhotoChange: (photo: Pho
   const [notes, setNotes] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
+  // Whether any of this note was dictated, so it's saved as a voice note.
+  const [usedVoice, setUsedVoice] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Tags the last context note added, as "type:name", so they can be highlighted.
@@ -24,6 +26,7 @@ export function useContextNotes(photo: PhotoWithTags, onPhotoChange: (photo: Pho
   useEffect(() => {
     setOpen(false);
     setText("");
+    setUsedVoice(false);
     setBusy(false);
     setError(null);
     // Undo acts on whichever photo is showing, so the bar from the previous
@@ -55,6 +58,7 @@ export function useContextNotes(photo: PhotoWithTags, onPhotoChange: (photo: Pho
   function cancel() {
     setOpen(false);
     setText("");
+    setUsedVoice(false);
     setError(null);
   }
 
@@ -70,12 +74,13 @@ export function useContextNotes(photo: PhotoWithTags, onPhotoChange: (photo: Pho
       const res = await fetch(`/api/photos/${photo.id}/context`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: trimmed, input_method: "text" }),
+        body: JSON.stringify({ text: trimmed, input_method: usedVoice ? "voice" : "text" }),
       });
       if (!res.ok) throw new Error("Could not add context");
       const { photo: updated, new_tags: newTags } = await res.json();
       onPhotoChange(updated);
       setNotes((prev) => [...prev, trimmed]);
+      setUsedVoice(false);
       setNewTagKeys(new Set((newTags as { name: string; type: string }[]).map((t) => `${t.type}:${t.name}`)));
       setText("");
       setOpen(false);
@@ -107,7 +112,12 @@ export function useContextNotes(photo: PhotoWithTags, onPhotoChange: (photo: Pho
     }
   }
 
-  return { notes, open, setOpen, text, setText, busy, error, newTagKeys, showUndo, save, undo, cancel };
+  function addDictation(spoken: string) {
+    setText((prev) => (prev ? `${prev} ${spoken}` : spoken));
+    setUsedVoice(true);
+  }
+
+  return { notes, open, setOpen, text, setText, addDictation, busy, error, newTagKeys, showUndo, save, undo, cancel };
 }
 
 export type ContextNotesState = ReturnType<typeof useContextNotes>;

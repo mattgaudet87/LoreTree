@@ -35,9 +35,8 @@ export function useSavedFilters() {
     }
   }, []);
 
-  function saveFilter(filter: Omit<SavedFilter, "id" | "label">) {
-    const label = window.prompt("Name this filter");
-    if (!label || !label.trim()) return;
+  function saveFilter(filter: Omit<SavedFilter, "id" | "label">, label: string) {
+    if (!label.trim()) return;
     const next: SavedFilter[] = [
       ...savedFilters,
       { ...filter, id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, label: label.trim() },

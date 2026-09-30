@@ -140,7 +140,9 @@ export default function FeedClient() {
   }
 
   function goBack() {
-    router.push(back ? decodeURIComponent(back) : "/lore");
+    // searchParams has already decoded `back` once; decoding again would
+    // mangle names that contain commas. Only in-app addresses are allowed.
+    router.push(back && back.startsWith("/") && !back.startsWith("//") ? back : "/lore");
   }
 
   const label = filterLabel(filter, year, ids);

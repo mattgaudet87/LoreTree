@@ -2,6 +2,9 @@ import { db, DEFAULT_USER_ID } from "@/lib/db";
 import { isCategory } from "@/lib/categories";
 import type { PhotoRow, PhotoWithTags, Tag, TagSource, TagType } from "@/lib/types";
 
+// How a photo's tags are listed: people, then event, place, category, then details.
+const TAG_ORDER_SQL = `ORDER BY CASE t.type WHEN 'person' THEN 0 WHEN 'event' THEN 1 WHEN 'place' THEN 2 WHEN 'category' THEN 3 ELSE 4 END, t.name`;
+
 export function toPhotoWithTags(row: PhotoRow, tags: Tag[]): PhotoWithTags {
   return {
     id: row.id,
@@ -26,7 +29,7 @@ export function getTagsForPhoto(photoId: string, userId = DEFAULT_USER_ID): Tag[
        FROM photo_tags pt
        JOIN tags t ON t.id = pt.tag_id
        WHERE pt.photo_id = ? AND pt.user_id = ?
-       ORDER BY CASE t.type WHEN 'person' THEN 0 WHEN 'event' THEN 1 WHEN 'place' THEN 2 WHEN 'category' THEN 3 ELSE 4 END, t.name`
+       ${TAG_ORDER_SQL}`
     )
     .all(photoId, userId) as Tag[];
 }
@@ -42,7 +45,7 @@ export function getTagsForPhotos(photoIds: string[], userId = DEFAULT_USER_ID): 
        FROM photo_tags pt
        JOIN tags t ON t.id = pt.tag_id
        WHERE pt.photo_id IN (${placeholders}) AND pt.user_id = ?
-       ORDER BY CASE t.type WHEN 'person' THEN 0 WHEN 'event' THEN 1 WHEN 'place' THEN 2 WHEN 'category' THEN 3 ELSE 4 END, t.name`
+       ${TAG_ORDER_SQL}`
     )
     .all(...photoIds, userId) as (Tag & { photo_id: string })[];
 
@@ -100,16 +103,28 @@ function deleteOrphanTags(userId: string): void {
   db.prepare(`DELETE FROM tags WHERE user_id = ? AND id NOT IN (SELECT tag_id FROM photo_tags)`).run(userId);
 }
 
-function getOrCreateTag(name: string, type: TagType, userId: string): number {
+/**
+ * Finds the tag with this exact name and type, or creates it. Shared with the
+ * importer and the sample seeder, which also want to know if it was new.
+ */
+export function findOrCreateTag(
+  name: string,
+  type: TagType,
+  userId = DEFAULT_USER_ID
+): { id: number; created: boolean } {
   const existing = db
     .prepare(`SELECT id FROM tags WHERE user_id = ? AND type = ? AND name = ?`)
     .get(userId, type, name) as { id: number } | undefined;
-  if (existing) return existing.id;
+  if (existing) return { id: existing.id, created: false };
 
   const result = db
     .prepare(`INSERT INTO tags (user_id, name, type) VALUES (?, ?, ?)`)
     .run(userId, name, type);
-  return Number(result.lastInsertRowid);
+  return { id: Number(result.lastInsertRowid), created: true };
+}
+
+function getOrCreateTag(name: string, type: TagType, userId: string): number {
+  return findOrCreateTag(name, type, userId).id;
 }
 
 export function addPhotoTag(
@@ -391,7 +406,10 @@ export function undoLastContextNote(photoId: string, userId = DEFAULT_USER_ID): 
   return getPhotoById(photoId, userId);
 }
 
-/** favorite x3 + apple_score + people count x0.5 + (has context note) x2 */
+/**
+ * favorite x3 + apple_score + people count x0.5 + (has context note) x2.
+ * Not used yet: kept for Reminisce, which will pick which photos to ask about.
+ */
 export function highlightScore(photoId: string, userId = DEFAULT_USER_ID): number {
   const row = db
     .prepare(`SELECT is_favorite, apple_score FROM photos WHERE id = ? AND user_id = ?`)

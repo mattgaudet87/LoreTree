@@ -109,7 +109,6 @@ export default function DetailPanel({ photo, onClose, onPhotoChange }: DetailPan
         <ActionRow
           key={`actions-${photo.id}`}
           photo={photo}
-          onPhotoChange={onPhotoChange}
           onToggleContext={() => context.setOpen((open) => !open)}
         />
 

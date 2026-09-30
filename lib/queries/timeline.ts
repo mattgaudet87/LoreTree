@@ -3,7 +3,9 @@ import { MONTH_NAMES } from "@/lib/queries/date-utils";
 
 export type TimelineStartType = "person" | "place" | "event";
 
-const TAG_CAP = 6;
+// Enough tags for the Timeline's "+ more" chip to expand into; the page
+// shows only the first few until then.
+const TAG_CAP = 40;
 
 export interface TimelineTag {
   value: string;
@@ -14,7 +16,6 @@ export interface YearTagSummary {
   year: number;
   count: number;
   tags: TimelineTag[];
-  hasMore: boolean;
 }
 
 export interface MonthTagSummary {
@@ -22,7 +23,6 @@ export interface MonthTagSummary {
   name: string;
   count: number;
   tags: TimelineTag[];
-  hasMore: boolean;
 }
 
 function tagsFor(
@@ -56,7 +56,6 @@ export function getLifetimeTimelineTags(nodeType: TimelineStartType, userId = DE
       year,
       count,
       tags: allTags.slice(0, TAG_CAP),
-      hasMore: allTags.length > TAG_CAP,
     };
   });
 }
@@ -79,7 +78,6 @@ export function getYearMonthsTags(
       name: MONTH_NAMES[month - 1],
       count,
       tags: allTags.slice(0, TAG_CAP),
-      hasMore: allTags.length > TAG_CAP,
     };
   });
 }

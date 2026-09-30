@@ -15,11 +15,14 @@ interface LoreSearchResultsProps {
   query: string;
   // null while a search is still loading.
   result: SearchResult | null;
+  // Where the feed's back button returns to (this same search).
+  backHref: string;
 }
 
 /** Search results: filter chips by tag type, a thumbnail grid, and a "View photos" button. */
-export default function LoreSearchResults({ query, result }: LoreSearchResultsProps) {
+export default function LoreSearchResults({ query, result, backHref }: LoreSearchResultsProps) {
   const idsParam = result ? result.photos.map((p) => p.id).join(",") : "";
+  const feedHref = (extra = "") => `/feed?ids=${encodeURIComponent(idsParam)}${extra}&back=${encodeURIComponent(backHref)}`;
 
   return (
     <div className="flex flex-1 flex-col px-4 pb-4">
@@ -40,7 +43,7 @@ export default function LoreSearchResults({ query, result }: LoreSearchResultsPr
                 {values!.map((v) => (
                   <a
                     key={v.value}
-                    href={`/feed?ids=${encodeURIComponent(idsParam)}&filter=${encodeURIComponent(valueSegment(type, v.value))}`}
+                    href={feedHref(`&filter=${encodeURIComponent(valueSegment(type, v.value))}`)}
                     className="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-xs text-text transition-colors hover:border-accent"
                   >
                     {v.value} <span className="text-text-muted">({v.count})</span>
@@ -54,7 +57,7 @@ export default function LoreSearchResults({ query, result }: LoreSearchResultsPr
             {result.photos.map((p) => (
               <a
                 key={p.id}
-                href={`/feed?ids=${encodeURIComponent(idsParam)}&start=${p.id}`}
+                href={feedHref(`&start=${p.id}`)}
                 className="relative block aspect-square overflow-hidden rounded-lg border border-border bg-surface-2"
               >
                 {p.thumb_path && (
@@ -66,7 +69,7 @@ export default function LoreSearchResults({ query, result }: LoreSearchResultsPr
           </div>
 
           <a
-            href={`/feed?ids=${encodeURIComponent(idsParam)}`}
+            href={feedHref()}
             className="banner-gradient mx-0 mt-4 rounded-2xl px-4 py-4 text-center text-sm font-medium text-white shadow-lg"
           >
             {result.total > result.photos.length

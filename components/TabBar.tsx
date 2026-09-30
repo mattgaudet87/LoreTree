@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 const HOME_ICON = (
@@ -50,6 +50,11 @@ const ADD_LORE_OPTIONS: { href: string; label: string; hint: string; soon?: bool
 
 export default function TabBar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // Search lives inside the Lore page, so it counts as the Search tab
+  // whenever the search box is open there.
+  const onLore = pathname?.startsWith("/lore") ?? false;
+  const searchActive = onLore && searchParams.get("search") === "1";
   const [addLoreOpen, setAddLoreOpen] = useState(false);
 
   const linkClass = (active: boolean) =>
@@ -66,7 +71,7 @@ export default function TabBar() {
             <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Home</span>
           </Link>
 
-          <Link href="/lore" className={`${linkClass(pathname?.startsWith("/lore") ?? false)} flex-1 flex-col md:flex-none md:flex-row`}>
+          <Link href="/lore" className={`${linkClass(onLore && !searchActive)} flex-1 flex-col md:flex-none md:flex-row`}>
             {LORE_ICON}
             <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Lore</span>
           </Link>
@@ -80,7 +85,7 @@ export default function TabBar() {
             <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Add Lore</span>
           </button>
 
-          <Link href="/search" className={`${linkClass(pathname?.startsWith("/search") ?? false)} flex-1 flex-col md:flex-none md:flex-row`}>
+          <Link href="/search" className={`${linkClass(searchActive)} flex-1 flex-col md:flex-none md:flex-row`}>
             {SEARCH_ICON}
             <span className="tab-label whitespace-nowrap overflow-hidden md:w-0 md:opacity-0 md:transition-all md:duration-200 md:group-hover:w-auto md:group-hover:opacity-100">Search</span>
           </Link>

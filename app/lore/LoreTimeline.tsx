@@ -1,27 +1,33 @@
+import { useState } from "react";
 import { valueSegment } from "@/lib/queries/filters";
 import type { MonthTagSummary, YearTagSummary } from "@/lib/queries/timeline";
 import { BackButton } from "./lore-ui";
 import { START_DOT, viewPhotosLabel, type OpenGrid, type SetParams, type StartType } from "./lore-shared";
 
+// How many tag chips a year or month shows before "+ more".
+const VISIBLE_TAGS = 6;
+
 // The small tag chips under each year or month; tapping one opens the grid for that tag in that period.
 function TagChips({
   tags,
-  hasMore,
   year,
   month,
   start,
   openGrid,
 }: {
   tags: { value: string }[];
-  hasMore: boolean;
   year: number;
   month?: number;
   start: StartType;
   openGrid: OpenGrid;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? tags : tags.slice(0, VISIBLE_TAGS);
+  const hidden = tags.length - shown.length;
+
   return (
     <div className="flex flex-wrap gap-1.5">
-      {tags.map((t) => (
+      {shown.map((t) => (
         <button
           key={t.value}
           onClick={(e) => {
@@ -34,10 +40,16 @@ function TagChips({
           {t.value}
         </button>
       ))}
-      {hasMore && (
-        <span className="flex items-center rounded-full border border-border px-2.5 py-1 text-xs text-text-muted">
-          +
-        </span>
+      {hidden > 0 && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(true);
+          }}
+          className="flex items-center rounded-full border border-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:text-text"
+        >
+          +{hidden} more
+        </button>
       )}
     </div>
   );
@@ -78,7 +90,7 @@ export default function LoreTimeline({
 
       {!error && !yearParam && years && years.length > 0 && (
         <div className="flex flex-col">
-          {years.map(({ year, count, tags, hasMore }) => (
+          {years.map(({ year, count, tags }) => (
             <div
               key={year}
               role="button"
@@ -95,7 +107,7 @@ export default function LoreTimeline({
                   {count} photo{count === 1 ? "" : "s"}
                 </p>
               </div>
-              <TagChips tags={tags} hasMore={hasMore} year={year} start={start} openGrid={openGrid} />
+              <TagChips tags={tags} year={year} start={start} openGrid={openGrid} />
             </div>
           ))}
 
@@ -115,7 +127,7 @@ export default function LoreTimeline({
 
       {!error && yearParam && months && months.length > 0 && (
         <div className="flex flex-col">
-          {months.map(({ month, name, count, tags, hasMore }) => (
+          {months.map(({ month, name, count, tags }) => (
             <div
               key={month}
               role="button"
@@ -134,7 +146,7 @@ export default function LoreTimeline({
                   {count} photo{count === 1 ? "" : "s"}
                 </span>
               </div>
-              <TagChips tags={tags} hasMore={hasMore} year={Number(yearParam)} month={month} start={start} openGrid={openGrid} />
+              <TagChips tags={tags} year={Number(yearParam)} month={month} start={start} openGrid={openGrid} />
             </div>
           ))}
 

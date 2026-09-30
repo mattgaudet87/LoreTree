@@ -15,7 +15,7 @@ export default function ContextEditor({ context }: { context: ContextNotesState 
               rows={3}
               className="flex-1 resize-none rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-text-muted"
             />
-            <MicButton onResult={(spoken) => context.setText((prev) => (prev ? `${prev} ${spoken}` : spoken))} />
+            <MicButton onResult={context.addDictation} />
           </div>
           {context.error && <p className="text-xs text-node-events">{context.error}</p>}
           <div className="flex gap-2">

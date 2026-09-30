@@ -17,6 +17,8 @@ import LoreToolbar from "./LoreToolbar";
 import { BackButton } from "./lore-ui";
 import {
   GRID_LIMIT,
+  TIMELINE_START_OPTIONS,
+  VIEW_OPTIONS,
   segmentsToPath,
   type GridState,
   type NetworkData,
@@ -33,15 +35,21 @@ const SEARCH_DELAY_MS = 300;
 export default function LoreClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const view = (searchParams.get("view") as View) ?? "map";
-  const start = (searchParams.get("start") as StartType) ?? "person";
+  // Unknown values in the address (e.g. ?view=foo) fall back to the defaults instead of a blank page.
+  const viewParam = searchParams.get("view");
+  const view: View = VIEW_OPTIONS.some((o) => o.value === viewParam) ? (viewParam as View) : "map";
+  const startParam = searchParams.get("start");
+  const start: StartType = TIMELINE_START_OPTIONS.some((o) => o.value === startParam)
+    ? (startParam as StartType)
+    : "person";
   const path = searchParams.get("path") ?? "";
   const show = searchParams.get("show");
   const yearParam = searchParams.get("year");
-  const searchParam = searchParams.get("search");
+  // The search box state lives in the address (search=1, q=...) so the Search
+  // tab can light up and the feed's back button returns to the same search.
+  const searchOpen = searchParams.get("search") === "1";
 
-  const [searchOpen, setSearchOpen] = useState(searchParam === "1");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [data, setData] = useState<NetworkData | null>(null);
   const [timelineYears, setTimelineYears] = useState<YearTagSummary[] | null>(null);
@@ -50,11 +58,6 @@ export default function LoreClient() {
   const [grid, setGrid] = useState<GridState | null>(null);
   const [gridLoading, setGridLoading] = useState(false);
   const { savedFilters, saveFilter, deleteFilter } = useSavedFilters();
-
-  // The Search tab links here with ?search=1 so the search box opens straight away.
-  useEffect(() => {
-    if (searchParam === "1") setSearchOpen(true);
-  }, [searchParam]);
 
   const segments = useMemo(() => {
     try {
@@ -176,6 +179,14 @@ export default function LoreClient() {
     const timer = setTimeout(runSearch, SEARCH_DELAY_MS);
 
     function runSearch() {
+      // Keep the query in the address (replacing, not adding history steps)
+      // so coming back from the feed restores this search.
+      const next = new URLSearchParams(window.location.search);
+      if (next.get("q") !== trimmedQuery) {
+        next.set("q", trimmedQuery);
+        router.replace(`/lore?${next.toString()}`, { scroll: false });
+      }
+
       fetch(`/api/search?q=${encodeURIComponent(trimmedQuery)}`)
         .then((res) => {
           if (!res.ok) throw new Error("Search failed");
@@ -193,7 +204,28 @@ export default function LoreClient() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [trimmedQuery]);
+  }, [trimmedQuery, router]);
+
+  function changeQuery(next: string) {
+    setQuery(next);
+    // Emptying the box by typing drops the old query from the address, so
+    // coming back doesn't bring it back. (Buttons that clear it do this themselves.)
+    if (!next.trim() && searchParams.has("q")) setParams({ q: null });
+  }
+
+  function toggleSearch() {
+    // Closing the box also clears the search, so its results don't linger behind a hidden box.
+    if (searchOpen) setQuery("");
+    setParams({ search: searchOpen ? null : "1", q: null });
+  }
+
+  // Where the feed's back button should return to from a search result.
+  const searchBackHref = useMemo(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("search", "1");
+    next.set("q", trimmedQuery);
+    return `/lore?${next.toString()}`;
+  }, [searchParams, trimmedQuery]);
 
   function selectNode(node: NetworkNode) {
     const nextSegments = [...segments, { kind: "value" as const, nodeType: node.type, value: node.value }];
@@ -251,13 +283,20 @@ export default function LoreClient() {
 
   function clearFilters() {
     setQuery("");
-    setParams({ path: null, show: null, year: null });
+    setParams({ path: null, show: null, year: null, q: null });
   }
 
   function applyFilter(sf: SavedFilter) {
     setQuery(sf.query);
-    setSearchOpen(!!sf.query);
-    setParams({ view: sf.view, path: sf.path || null, show: sf.show || null, start: sf.start, year: sf.year || null });
+    setParams({
+      view: sf.view,
+      path: sf.path || null,
+      show: sf.show || null,
+      start: sf.start,
+      year: sf.year || null,
+      search: sf.query ? "1" : null,
+      q: sf.query || null,
+    });
   }
 
   const centerLabel = data?.center ? data.center.label : "All";
@@ -277,19 +316,19 @@ export default function LoreClient() {
         crumbs={crumbs}
         setParams={setParams}
         searchOpen={searchOpen}
-        onToggleSearch={() => setSearchOpen((v) => !v)}
+        onToggleSearch={toggleSearch}
         query={query}
-        onQueryChange={setQuery}
+        onQueryChange={changeQuery}
         savedFilters={savedFilters}
-        onSaveFilter={() =>
-          saveFilter({ view, path, show: show ?? "", start, year: yearParam ?? "", query: trimmedQuery })
+        onSaveFilter={(label) =>
+          saveFilter({ view, path, show: show ?? "", start, year: yearParam ?? "", query: trimmedQuery }, label)
         }
         onApplyFilter={applyFilter}
         onDeleteFilter={deleteFilter}
         onClearFilters={clearFilters}
       />
 
-      {trimmedQuery && <LoreSearchResults query={trimmedQuery} result={searchResult} />}
+      {trimmedQuery && <LoreSearchResults query={trimmedQuery} result={searchResult} backHref={searchBackHref} />}
 
       {!trimmedQuery && view === "map" && (
         <div className="relative flex flex-1 flex-col px-6 py-4">

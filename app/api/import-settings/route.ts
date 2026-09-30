@@ -6,7 +6,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as { mode?: string; album?: string };
+  const body = (await request.json().catch(() => null)) as { mode?: string; album?: string } | null;
+  if (!body) {
+    return NextResponse.json({ error: "Request body was not valid JSON" }, { status: 400 });
+  }
   if (body.mode !== "album" && body.mode !== "all") {
     return NextResponse.json({ error: "mode must be 'album' or 'all'" }, { status: 400 });
   }

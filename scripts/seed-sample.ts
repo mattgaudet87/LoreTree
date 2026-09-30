@@ -8,7 +8,7 @@ import sharp from "sharp";
 import { db, DEFAULT_USER_ID } from "../lib/db";
 import { categoryForAppleLabel } from "../lib/categories";
 import { formatEventDateLabel, weekStartOf } from "../lib/queries/date-utils";
-import type { TagType } from "../lib/types";
+import { findOrCreateTag } from "../lib/queries/photo";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DISPLAY_DIR = path.join(DATA_DIR, "images", "display");
@@ -59,17 +59,6 @@ async function makeImage(filePath: string, width: number, height: number, color:
   })
     .jpeg({ quality: 80 })
     .toFile(filePath);
-}
-
-function insertTag(name: string, type: TagType): number {
-  const existing = db
-    .prepare(`SELECT id FROM tags WHERE user_id = ? AND type = ? AND name = ?`)
-    .get(DEFAULT_USER_ID, type, name) as { id: number } | undefined;
-  if (existing) return existing.id;
-  const result = db
-    .prepare(`INSERT INTO tags (user_id, name, type) VALUES (?, ?, ?)`)
-    .run(DEFAULT_USER_ID, name, type);
-  return Number(result.lastInsertRowid);
 }
 
 function linkTag(photoId: string, tagId: number, source: "apple" | "ai" | "user") {
@@ -153,13 +142,13 @@ async function seed() {
       });
 
       for (const person of people) {
-        linkTag(id, insertTag(person, "person"), "apple");
+        linkTag(id, findOrCreateTag(person, "person").id, "apple");
       }
-      linkTag(id, insertTag(place, "place"), "apple");
-      linkTag(id, insertTag(category, "category"), "apple");
-      linkTag(id, insertTag(eventName(takenAt, place), "event"), "apple");
+      linkTag(id, findOrCreateTag(place, "place").id, "apple");
+      linkTag(id, findOrCreateTag(category, "category").id, "apple");
+      linkTag(id, findOrCreateTag(eventName(takenAt, place), "event").id, "apple");
       for (const keyword of keywords) {
-        linkTag(id, insertTag(keyword, "keyword"), "apple");
+        linkTag(id, findOrCreateTag(keyword, "keyword").id, "apple");
       }
 
       if (i % 5 === 0) {

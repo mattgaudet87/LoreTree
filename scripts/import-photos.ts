@@ -14,7 +14,7 @@ import { db, DEFAULT_USER_ID } from "../lib/db";
 import { categoryForAppleLabel } from "../lib/categories";
 import { formatEventDateLabel, weekStartOf } from "../lib/queries/date-utils";
 import { readImportSettings } from "../lib/import-settings";
-import type { TagType } from "../lib/types";
+import { findOrCreateTag } from "../lib/queries/photo";
 
 const SETTINGS = readImportSettings();
 // null means "whole library" — no --album filter passed to osxphotos.
@@ -79,17 +79,6 @@ function extractPlaceName(place: OsxphotosPlace | null | undefined): string | nu
   if (place.names?.city?.length) return place.names.city[0];
   if (place.name) return place.name.split(",")[0].trim();
   return null;
-}
-
-function getOrCreateTag(name: string, type: TagType): { id: number; created: boolean } {
-  const existing = db
-    .prepare(`SELECT id FROM tags WHERE user_id = ? AND type = ? AND name = ?`)
-    .get(DEFAULT_USER_ID, type, name) as { id: number } | undefined;
-  if (existing) return { id: existing.id, created: false };
-  const result = db
-    .prepare(`INSERT INTO tags (user_id, name, type) VALUES (?, ?, ?)`)
-    .run(DEFAULT_USER_ID, name, type);
-  return { id: Number(result.lastInsertRowid), created: true };
 }
 
 function linkTag(photoId: string, tagId: number) {
@@ -280,20 +269,20 @@ async function main() {
       const name = person.trim();
       if (!name || name === "_UNKNOWN_") continue;
       peopleFound.add(name);
-      linkTag(record.uuid, getOrCreateTag(name, "person").id);
+      linkTag(record.uuid, findOrCreateTag(name, "person").id);
     }
 
     if (placeName) {
       placesFound.add(placeName);
-      linkTag(record.uuid, getOrCreateTag(placeName, "place").id);
+      linkTag(record.uuid, findOrCreateTag(placeName, "place").id);
     }
 
     const labels = record.labels ?? [];
     if (labels.length > 0) {
       const matchedCategory = labels.map(categoryForAppleLabel).find((c) => c !== "Other");
-      linkTag(record.uuid, getOrCreateTag(matchedCategory ?? "Other", "category").id);
+      linkTag(record.uuid, findOrCreateTag(matchedCategory ?? "Other", "category").id);
       for (const label of labels) {
-        linkTag(record.uuid, getOrCreateTag(label, "keyword").id);
+        linkTag(record.uuid, findOrCreateTag(label, "keyword").id);
       }
     }
 
@@ -304,7 +293,7 @@ async function main() {
       const eventLabel = `${placeName}, ${formatEventDateLabel(datePart)}`;
       const hasOtherEvent = hasOtherEventStmt.get(record.uuid, DEFAULT_USER_ID, eventLabel);
       if (!hasOtherEvent) {
-        const event = getOrCreateTag(eventLabel, "event");
+        const event = findOrCreateTag(eventLabel, "event");
         if (event.created) eventsCreated++;
         linkTag(record.uuid, event.id);
       }

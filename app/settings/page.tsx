@@ -19,6 +19,16 @@ interface AnalyzeResult {
 
 type Busy = "analyze" | "all" | "retry" | null;
 
+// Photos per batch; matches the analyze API's default.
+const BATCH_SIZE = 20;
+
+// Progress of the running "Analyze next 20" batch, worked out from the live
+// stats: every photo it finishes moves from waiting to analyzed or errors.
+interface BatchProgress {
+  startFinished: number;
+  size: number;
+}
+
 async function fetchStats(): Promise<Stats> {
   const res = await fetch("/api/stats");
   return res.json();
@@ -36,6 +46,7 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stopRef = useRef(false);
+  const [batch, setBatch] = useState<BatchProgress | null>(null);
 
   useEffect(() => {
     fetchStats().then(setStats);
@@ -58,8 +69,8 @@ export default function SettingsPage() {
     return res.json();
   }
 
-  // "analyze" = one batch of 20, "retry" = one batch of failed photos,
-  // "all" = batches of 20 until nothing is waiting (or Stop is pressed, or a
+  // "analyze" = one batch, "retry" = one batch of failed photos,
+  // "all" = batches until nothing is waiting (or Stop is pressed, or a
   // whole batch fails, which means something is wrong and retrying is pointless).
   async function run(mode: Exclude<Busy, null>) {
     setBusy(mode);
@@ -67,6 +78,11 @@ export default function SettingsPage() {
     setLastResult(null);
     setError(null);
     stopRef.current = false;
+    setBatch(
+      stats && mode === "analyze"
+        ? { startFinished: stats.analyzed + stats.errors, size: Math.min(BATCH_SIZE, stats.waiting) }
+        : null
+    );
 
     pollRef.current = setInterval(() => {
       fetchStats().then(setStats);
@@ -88,6 +104,7 @@ export default function SettingsPage() {
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
       setBusy(null);
+      setBatch(null);
       fetchStats().then(setStats);
     }
   }
@@ -112,7 +129,11 @@ export default function SettingsPage() {
           disabled={busy !== null || !stats || stats.waiting === 0}
           className="rounded-xl bg-accent px-4 py-3 text-sm font-medium text-bg transition-opacity disabled:opacity-40"
         >
-          {busy === "analyze" ? `Analyzing… ${stats?.analyzed ?? 0} done` : "Analyze next 20"}
+          {busy === "analyze"
+            ? batch && stats
+              ? `Analyzing… ${Math.min(batch.size, stats.analyzed + stats.errors - batch.startFinished)} of ${batch.size}`
+              : "Analyzing…"
+            : `Analyze next ${BATCH_SIZE}`}
         </button>
 
         {busy === "all" ? (
@@ -148,10 +169,10 @@ export default function SettingsPage() {
         ) : (
           <button
             onClick={() => setConfirmAll(true)}
-            disabled={busy !== null || waiting <= 20}
+            disabled={busy !== null || waiting <= BATCH_SIZE}
             className="rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-text transition-opacity disabled:opacity-40"
           >
-            {waiting > 20 ? `Analyze all ${waiting} waiting` : "Analyze all waiting"}
+            {waiting > BATCH_SIZE ? `Analyze all ${waiting} waiting` : "Analyze all waiting"}
           </button>
         )}
 

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRef, useState } from "react";
 import type { TouchEvent as ReactTouchEvent, MouseEvent as ReactMouseEvent } from "react";
 import type { PhotoWithTags } from "@/lib/types";
@@ -140,12 +139,8 @@ export default function PhotoCard({ photo, index, total, fitMode, onOpenDetail }
         ) : photo.description ? (
           <p className="line-clamp-2 text-sm text-text">{photo.description}</p>
         ) : (
-          <p className="pointer-events-auto text-sm text-text-muted">
-            No description yet —{" "}
-            <Link href="/settings" onClick={(e) => e.stopPropagation()} className="underline">
-              analyze it in Settings
-            </Link>
-          </p>
+          // Tapping the card opens the detail view, which has "Analyze this photo".
+          <p className="text-sm text-text-muted">No description yet — tap to analyze</p>
         )}
         <div className="mt-2 flex items-center justify-between text-xs text-text-muted">
           <span>{formatPhotoDate(photo.taken_at)}</span>
